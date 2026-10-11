@@ -1,9 +1,15 @@
 name: Applications Windows et Mac
 
 on:
-  push:
-    tags: ["v*"]          # une nouvelle version : git tag v1.0.1 && git push --tags
-  workflow_dispatch:
+  workflow_dispatch:      # onglet Actions → « Applications Windows et Mac » → Run workflow
+    inputs:
+      version:
+        description: "Numéro de version (ex. 1.0.1)"
+        required: true
+        default: "1.0.0"
+
+env:
+  DOUBLAGE_VERSION: ${{ inputs.version }}
 
 permissions:
   contents: write
@@ -18,9 +24,6 @@ jobs:
           python-version: "3.12"
       - name: Outils de construction
         run: python -m pip install "pyinstaller>=6.10,<7" "pywebview>=5.3,<7"
-      - name: Version
-        shell: bash
-        run: echo "DOUBLAGE_VERSION=${GITHUB_REF_NAME/#v/}" >> $GITHUB_ENV
       - name: Application
         run: python launcher/build.py
       - name: Installateur
@@ -28,8 +31,6 @@ jobs:
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
-          $v = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:DOUBLAGE_VERSION } else { "1.0.0" }
-          $env:DOUBLAGE_VERSION = $v
           & $iscc launcher\Doublage.iss
           if ($LASTEXITCODE -ne 0) { exit 1 }
       - name: Vérification
@@ -46,16 +47,7 @@ jobs:
           path: dist/Doublage-Setup.exe
 
   mac:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-14   # puces Apple (M1, M2, M3, M4…)
-            arch: AppleSilicon
-          - runner: macos-15-intel   # Mac Intel
-            arch: Intel
-    runs-on: ${{ matrix.runner }}
-    continue-on-error: ${{ matrix.arch == 'Intel' }}
+    runs-on: macos-14     # puces Apple (M1, M2, M3, M4…)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -65,8 +57,6 @@ jobs:
         run: |
           python -m pip install "pyinstaller>=6.10,<7" "pywebview>=5.3,<7"
           brew install create-dmg
-      - name: Version
-        run: echo "DOUBLAGE_VERSION=${GITHUB_REF_NAME/#v/}" >> $GITHUB_ENV
       - name: Application
         run: python launcher/build.py
       - name: Image disque (.dmg)
@@ -79,19 +69,18 @@ jobs:
             create-dmg --volname "Doublage" --volicon launcher/icon.icns --background dmg-background.tiff \
               --window-pos 200 160 --window-size 660 420 --icon-size 110 --text-size 13 \
               --icon "Doublage.app" 165 235 --hide-extension "Doublage.app" --app-drop-link 495 235 \
-              --no-internet-enable "dist/Doublage-Mac-${{ matrix.arch }}.dmg" dmg/ && break
+              --no-internet-enable "dist/Doublage-Mac.dmg" dmg/ && break
             sleep 10
           done
           ls -la dist
-          test -f "dist/Doublage-Mac-${{ matrix.arch }}.dmg"
+          test -f "dist/Doublage-Mac.dmg"
       - uses: actions/upload-artifact@v4
         with:
-          name: Doublage-Mac-${{ matrix.arch }}
-          path: dist/Doublage-Mac-${{ matrix.arch }}.dmg
+          name: Doublage-Mac
+          path: dist/Doublage-Mac.dmg
 
   release:
     needs: [windows, mac]
-    if: always() && needs.windows.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -101,13 +90,13 @@ jobs:
       - name: Publier la version
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'derniere-version' }}
-          name: ${{ github.ref_type == 'tag' && format('Doublage {0}', github.ref_name) || 'Doublage (dernière version)' }}
-          prerelease: ${{ github.ref_type != 'tag' }}
-          make_latest: ${{ github.ref_type == 'tag' }}
+          tag_name: v${{ inputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: Doublage ${{ inputs.version }}
+          make_latest: true
           files: out/*
           body: |
             **Windows** : télécharge `Doublage-Setup.exe` et lance-le.
-            **Mac** : `Doublage-Mac-AppleSilicon.dmg` (M1, M2, M3, M4…) ou `Doublage-Mac-Intel.dmg`, ouvre-le et glisse Doublage dans Applications.
+            **Mac** (M1, M2, M3, M4…) : ouvre `Doublage-Mac.dmg` et glisse Doublage dans Applications.
 
             Au premier lancement, Doublage installe son moteur (10 à 20 minutes, une seule fois).
