@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#07080d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Doublage">
+<title>Doublage</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg">
+<link rel="apple-touch-icon" href="/icon.svg">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="aurora"><i></i><i></i><i></i></div>
+<div class="glass toast" id="toast"></div>
+
+<div class="app">
+  <header class="top">
+    <div class="brand"><img src="/icon.svg" alt="">Doublage</div>
+    <span class="pill" id="sys"><span class="dot"></span>Connexion…</span>
+  </header>
+
+  <!-- ============================== DOUBLER ============================== -->
+  <section class="view on" id="v-dub">
+    <h1>Double une vidéo</h1>
+    <p class="lede">Un fichier ou un lien YouTube, une langue, une voix. Le reste est automatique.</p>
+
+    <div class="notice warn hidden" id="llm-warn">La traduction a besoin d'une IA : règle-la dans <a href="#" data-goto="v-settings">Réglages</a> (Ollama est gratuit).</div>
+
+    <div id="setup">
+      <div class="glass card">
+        <h2>Vidéo</h2>
+        <div class="seg" id="src-seg">
+          <button class="on" data-src="file">Fichier</button>
+          <button data-src="url">Lien YouTube</button>
+        </div>
+        <label class="drop" id="drop" data-panel="file">
+          <input type="file" id="file" accept="video/*,audio/*,.mkv,.srt" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg>
+          <strong id="drop-title">Choisir une vidéo</strong>
+          <small id="drop-sub">MP4, MOV, MKV, WebM… ou glisse-la ici</small>
+        </label>
+        <div data-panel="url" class="hidden">
+          <label class="field"><input type="url" id="url" placeholder="https://www.youtube.com/watch?v=…" inputmode="url"></label>
+          <p class="hint">YouTube et la plupart des sites vidéo fonctionnent.</p>
+        </div>
+      </div>
+
+      <div class="glass card">
+        <h2>Langues</h2>
+        <div class="row">
+          <label class="field"><span>Parlée dans la vidéo</span><select id="src-lang"></select></label>
+          <label class="field"><span>Doubler en</span><select id="dst-lang"></select></label>
+        </div>
+      </div>
+
+      <div class="glass card">
+        <h2>Voix</h2>
+        <div class="engines" id="engines"></div>
+        <div id="voice-box">
+          <label class="field" id="voice-field"><span>Voix</span><select id="voice"></select></label>
+          <div id="fish-box" class="hidden">
+            <label class="field"><span>Clé Fish Audio</span><input type="password" id="fish-key" placeholder="Laisser vide pour garder la clé enregistrée"></label>
+          </div>
+          <button class="btn small" id="preview"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Écouter</button>
+          <audio id="preview-audio" class="hidden"></audio>
+        </div>
+      </div>
+
+      <div class="glass card">
+        <h2>Résultat</h2>
+        <div class="seg" id="mode-seg">
+          <button class="on" data-mode="dub">Doublage</button>
+          <button data-mode="subtitles">Sous-titres seuls</button>
+        </div>
+        <label class="toggle"><span>Incruster les sous-titres<small>Sinon, seule la nouvelle voix est ajoutée</small></span><span class="switch"><input type="checkbox" id="burn"><i></i></span></label>
+      </div>
+
+      <button class="btn primary" id="go">Lancer le doublage</button>
+    </div>
+
+    <!-- Progression -->
+    <div class="glass card hidden" id="run">
+      <h2 id="run-title">En cours</h2>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px">
+        <strong id="run-step">Préparation…</strong><span class="pill" id="run-pct">0 %</span>
+      </div>
+      <div class="progress"><div id="bar"></div></div>
+      <div class="notice bad hidden" id="run-error"></div>
+      <div class="notice warn hidden" id="run-pause"></div>
+      <ul class="steps" id="steps"></ul>
+      <div class="btns" style="margin-top:16px">
+        <button class="btn small hidden" id="resume">Reprendre</button>
+        <button class="btn small hidden" id="retry">Réessayer</button>
+        <button class="btn small danger" id="stop">Arrêter</button>
+        <button class="btn small ghost hidden" id="new1">Nouveau doublage</button>
+      </div>
+      <p class="hint" style="margin-top:12px">Tu peux fermer cette page : le doublage continue sur ton PC.</p>
+    </div>
+
+    <!-- Résultat -->
+    <div class="glass card hidden" id="result">
+      <h2>Terminé</h2>
+      <video id="player" controls playsinline preload="metadata"></video>
+      <div class="btns" id="downloads"></div>
+      <button class="btn ghost" style="width:100%;margin-top:12px" id="new2">Nouveau doublage</button>
+    </div>
+  </section>
+
+  <!-- ============================== BIBLIOTHÈQUE ============================== -->
+  <section class="view" id="v-lib">
+    <h1>Bibliothèque</h1>
+    <p class="lede">Tes vidéos doublées, à regarder ou télécharger.</p>
+    <div class="glass card hidden" id="lib-player-card">
+      <video id="lib-player" controls playsinline></video>
+      <div class="btns" id="lib-downloads"></div>
+    </div>
+    <div class="lib" id="lib"></div>
+  </section>
+
+  <!-- ============================== RÉGLAGES ============================== -->
+  <section class="view" id="v-settings">
+    <h1>Réglages</h1>
+    <p class="lede">Enregistrés sur ton PC, dans config.yaml.</p>
+
+    <div class="glass card">
+      <h2>Traduction (IA)</h2>
+      <label class="field"><span>Service</span><select id="llm-preset"></select></label>
+      <label class="field"><span>Adresse de l'API</span><input type="url" id="llm-url"></label>
+      <label class="field"><span>Modèle</span><input type="text" id="llm-model"></label>
+      <label class="field" id="llm-key-field"><span>Clé API</span><input type="password" id="llm-key" placeholder="Laisser vide pour garder la clé enregistrée"></label>
+      <p class="hint" id="llm-hint"></p>
+    </div>
+
+    <div class="glass card">
+      <h2>Qualité</h2>
+      <label class="field"><span>Qualité des vidéos YouTube</span>
+        <select id="ytb"><option value="360">360p (rapide)</option><option value="1080">1080p</option><option value="best">La meilleure</option></select></label>
+      <label class="toggle"><span>Séparer la voix de la musique avant la transcription<small>Plus précis sur les vidéos avec musique, un peu plus long</small></span><span class="switch"><input type="checkbox" id="demucs"><i></i></span></label>
+      <label class="field" id="cb-field"><span>Expressivité de Chatterbox</span>
+        <select id="cb-exag"><option value="0.3">Calme</option><option value="0.5">Naturelle</option><option value="0.8">Expressive</option><option value="1.2">Très expressive</option></select></label>
+    </div>
+
+    <button class="btn primary" id="save">Enregistrer</button>
+
+    <div class="glass card" style="margin-top:14px">
+      <h2>Ce PC</h2>
+      <p id="sys-detail" style="margin:0 0 14px;color:var(--muted)"></p>
+      <button class="btn small ghost" id="logout">Se déconnecter</button>
+    </div>
+  </section>
+</div>
+
+<nav class="tabs glass">
+  <button class="on" data-view="v-dub"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v18M7 8v8M17 6v12M2 11v2M22 10v4"/></svg>Doubler</button>
+  <button data-view="v-lib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M10 9.5v5l4-2.5z" fill="currentColor"/></svg>Bibliothèque</button>
+  <button data-view="v-settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Réglages</button>
+</nav>
+
+<script src="/app.js"></script>
+</body>
+</html>

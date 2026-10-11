@@ -1,0 +1,373 @@
+"""Doublage — application web (PC et smartphone) au-dessus du moteur VideoLingo.
+
+Lancement : uv run start.py --web   (ou double-clic sur Lancer-Doublage.bat sous Windows)
+Ouvre ensuite http://localhost:8765 sur le PC, ou l'adresse affichée dans la console sur le téléphone.
+"""
+from __future__ import annotations
+
+import hashlib
+import hmac
+import os
+import re
+import secrets
+import shutil
+import socket
+import sys
+import time
+from importlib.util import find_spec
+from pathlib import Path
+from urllib.parse import urlparse
+
+from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+
+ROOT = Path(__file__).resolve().parent
+os.chdir(ROOT)  # le moteur travaille avec des chemins relatifs (config.yaml, output/)
+
+import api as engine  # noqa: E402  (FastAPI du moteur : /input, /run, /status, /files…)
+from core.pipeline import get_steps  # noqa: E402
+from core.utils.config_utils import load_key, load_key_or, update_key  # noqa: E402
+
+PORT = int(os.environ.get("DOUBLAGE_PORT", "8765"))
+HOST = os.environ.get("DOUBLAGE_HOST", "0.0.0.0")
+UPLOADS = ROOT / "uploads"
+HISTORY = ROOT / "history"
+OUTPUT = ROOT / "output"
+WEB = ROOT / "web"
+PASSWORD_FILE = ROOT / ".doublage_password"
+COOKIE = "doublage_session"
+PUBLIC = {"/login", "/manifest.webmanifest", "/icon.svg", "/app.css", "/login.js", "/favicon.ico"}
+
+# ------------------------------------------------------------------ mot de passe
+
+def password() -> str:
+    env = os.environ.get("DOUBLAGE_MOT_DE_PASSE", "").strip()
+    if env:
+        return env
+    if not PASSWORD_FILE.exists():
+        words = ["lune", "orage", "cafe", "vague", "piano", "renard", "sable", "neon", "brume", "cobalt",
+                 "ambre", "falaise", "comete", "tilleul", "corail", "givre"]
+        PASSWORD_FILE.write_text(f"{secrets.choice(words)}-{secrets.choice(words)}-{secrets.randbelow(900) + 100}",
+                                 encoding="utf-8")
+    return PASSWORD_FILE.read_text(encoding="utf-8").strip()
+
+
+def session_token() -> str:
+    return hmac.new(password().encode(), b"doublage-session-v1", hashlib.sha256).hexdigest()
+
+
+app = FastAPI(title="Doublage", docs_url=None, redoc_url=None)
+
+
+@app.middleware("http")
+async def require_login(request: Request, call_next):
+    path = request.url.path
+    ok = hmac.compare_digest(request.cookies.get(COOKIE, ""), session_token())
+    if ok or path in PUBLIC:
+        return await call_next(request)
+    if path.startswith("/api/"):
+        return JSONResponse({"detail": "Connexion requise"}, status_code=401)
+    return RedirectResponse("/login")
+
+
+@app.get("/login")
+def login_page():
+    return FileResponse(WEB / "login.html")
+
+
+@app.post("/login")
+def login(data: dict = Body(...)):
+    time.sleep(0.4)  # freine les essais à la chaîne
+    if not hmac.compare_digest(str(data.get("password", "")).strip(), password()):
+        raise HTTPException(401, "Mot de passe incorrect")
+    response = JSONResponse({"ok": True})
+    response.set_cookie(COOKIE, session_token(), max_age=60 * 60 * 24 * 90, httponly=True, samesite="lax")
+    return response
+
+
+@app.post("/logout")
+def logout():
+    response = JSONResponse({"ok": True})
+    response.delete_cookie(COOKIE)
+    return response
+
+
+# ------------------------------------------------------------------ réglages
+
+SECRETS = {"api.key", "fish_audio.api_key", "whisper.elevenlabs_api_key"}
+SETTINGS = [
+    "target_language", "dubbing_language_code", "whisper.language",
+    "tts_method", "edge_tts.voice", "kokoro_tts.voice", "kokoro_tts.speed",
+    "chatterbox_tts.clone", "chatterbox_tts.exaggeration", "fish_audio.mode", "fish_audio.api_key",
+    "api.key", "api.base_url", "api.model", "api.llm_support_json", "max_workers",
+    "burn_subtitles", "subtitle.dub_video_subtitles", "demucs", "ytb_resolution",
+]
+
+
+def _is_set(value) -> bool:
+    return bool(value) and not str(value).startswith(("YOUR_", "your_"))
+
+
+@app.get("/api/settings")
+def get_settings():
+    values = {}
+    for key in SETTINGS:
+        value = load_key_or(key, None)
+        if key in SECRETS:
+            values[key] = {"set": _is_set(value), "end": str(value)[-4:] if _is_set(value) else ""}
+        else:
+            values[key] = value
+    return values
+
+
+@app.post("/api/settings")
+def save_settings(data: dict = Body(...)):
+    if engine.runner.is_active:
+        raise HTTPException(409, "Un doublage est en cours : attends la fin pour changer les réglages.")
+    for key, value in data.items():
+        if key not in SETTINGS:
+            continue
+        if key in SECRETS and (value is None or value == ""):
+            continue  # champ laissé vide : on garde la clé déjà enregistrée
+        if key in {"max_workers"}:
+            value = max(1, int(value))
+        if key in {"kokoro_tts.speed", "chatterbox_tts.exaggeration"}:
+            value = float(value)
+        update_key(key, value, add_missing=True)
+    return get_settings()
+
+
+@app.get("/api/system")
+def system():
+    gpu = None
+    try:
+        import torch
+        if torch.cuda.is_available():
+            gpu = torch.cuda.get_device_name(0)
+        elif getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+            gpu = "Apple Silicon"
+    except Exception:
+        pass
+    return {
+        "gpu": gpu,
+        "engines": {
+            "edge_tts": find_spec("edge_tts") is not None,
+            "kokoro_tts": find_spec("kokoro") is not None,
+            "chatterbox_tts": find_spec("chatterbox") is not None,
+            "fish_audio": True,
+            "demucs": find_spec("demucs") is not None,
+        },
+        "llm_ready": _is_set(load_key_or("api.key", "")) or "localhost" in str(load_key_or("api.base_url", "")),
+    }
+
+
+# ------------------------------------------------------------------ envoi de vidéo par morceaux
+# Les tunnels Cloudflare gratuits refusent les envois de plus de 100 Mo : le navigateur envoie
+# la vidéo par morceaux de 32 Mo, recollés ici.
+
+UPLOAD_ID = re.compile(r"^[a-zA-Z0-9_-]{8,64}$")
+
+
+def _partial(upload_id: str) -> Path:
+    if not UPLOAD_ID.match(upload_id):
+        raise HTTPException(422, "Identifiant d'envoi invalide")
+    UPLOADS.mkdir(exist_ok=True)
+    return UPLOADS / f".partial_{upload_id}"
+
+
+@app.post("/api/upload/{upload_id}")
+async def upload_chunk(upload_id: str, request: Request, offset: int = 0):
+    path = _partial(upload_id)
+    size = path.stat().st_size if path.exists() else 0
+    if offset != size:
+        return JSONResponse({"size": size}, status_code=409)  # le navigateur reprend au bon endroit
+    with open(path, "ab") as file:
+        async for chunk in request.stream():
+            file.write(chunk)
+    return {"size": path.stat().st_size}
+
+
+@app.post("/api/upload/{upload_id}/finish")
+def upload_finish(upload_id: str, name: str):
+    path = _partial(upload_id)
+    if not path.exists():
+        raise HTTPException(404, "Envoi introuvable")
+    stem, suffix = os.path.splitext(os.path.basename(name))
+    suffix = suffix.lower()
+    allowed = {"." + f for f in load_key("allowed_video_formats") + load_key("allowed_audio_formats")} | {".srt"}
+    if suffix not in allowed:
+        path.unlink(missing_ok=True)
+        raise HTTPException(422, f"Format non pris en charge : {suffix or 'inconnu'}")
+    stem = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", stem).strip(". ") or "video"
+    final = UPLOADS / f"{stem[:80]}{suffix}"
+    if final.exists():
+        final.unlink()
+    path.rename(final)
+    return {"path": str(final)}
+
+
+# ------------------------------------------------------------------ lancer un doublage
+
+def _clear_output():
+    """Range le travail précédent dans l'historique avant d'en commencer un nouveau."""
+    if not OUTPUT.exists() or not any(OUTPUT.iterdir()):
+        return
+    try:
+        engine.archive_output()
+    except Exception:
+        HISTORY.mkdir(exist_ok=True)
+        shutil.move(str(OUTPUT), str(HISTORY / f"inacheve_{time.strftime('%Y%m%d_%H%M%S')}"))
+
+
+@app.post("/api/job", status_code=202)
+def start_job(data: dict = Body(...)):
+    with engine.operation_lock:
+        if engine.runner.is_active:
+            raise HTTPException(409, "Un doublage est déjà en cours.")
+        source = str(data.get("source", "")).strip()
+        if not source:
+            raise HTTPException(422, "Ajoute une vidéo ou un lien.")
+        if urlparse(source).scheme not in {"http", "https"}:
+            path = Path(source).resolve()
+            if not path.is_file() or path.parent != UPLOADS.resolve():
+                raise HTTPException(422, "Vidéo introuvable : renvoie-la.")
+            source = str(path)
+        mode = data.get("mode", "dub")  # dub | subtitles
+        if data.get("target_language"):
+            update_key("target_language", str(data["target_language"]))
+        if data.get("dubbing_language_code"):
+            update_key("dubbing_language_code", str(data["dubbing_language_code"]), add_missing=True)
+        if data.get("source_language"):
+            update_key("whisper.language", str(data["source_language"]))
+
+        def prepare():
+            _clear_output()
+            engine.prepare_input(source, "replace")
+            if urlparse(source).scheme not in {"http", "https"}:
+                Path(source).unlink(missing_ok=True)  # copiée dans output/ : on libère la place
+
+        steps = [("Prepare input", prepare)] + get_steps("all", dubbing=(mode == "dub"))
+        engine.runner.start(steps)
+        return {"accepted": True}
+
+
+@app.post("/api/run", status_code=202)
+def rerun(data: dict = Body(...)):
+    """Réessayer après une erreur : les étapes déjà faites sont gardées."""
+    return engine.run(engine.RunRequest(stage="all", dubbing=bool(data.get("dubbing", True))))
+
+
+@app.post("/api/stop")
+def stop_job():
+    engine.runner.stop()
+    return {"state": engine.runner.state}
+
+
+@app.post("/api/resume")
+def resume_job():
+    engine.runner.resume()
+    return {"state": engine.runner.state}
+
+
+@app.get("/api/status")
+def status():
+    return engine.status()
+
+
+@app.get("/api/files/{name}")
+def output_file(name: str):
+    return engine.file(name)
+
+
+# ------------------------------------------------------------------ bibliothèque
+
+@app.get("/api/library")
+def library():
+    items = []
+    folders = [p for p in HISTORY.iterdir() if p.is_dir()] if HISTORY.exists() else []
+    for folder in folders:
+        videos = [n for n in ("output_dub.mp4", "output_sub.mp4") if (folder / n).exists()]
+        if not videos:
+            continue
+        items.append({"id": folder.name, "title": folder.name, "video": videos[0],
+                      "files": sorted(p.name for p in folder.iterdir() if p.is_file() and p.suffix in {".mp4", ".srt", ".mp3", ".wav"}),
+                      "date": (folder / videos[0]).stat().st_mtime})
+    return sorted(items, key=lambda item: item["date"], reverse=True)
+
+
+@app.get("/api/library/{folder}/{name}")
+def library_file(folder: str, name: str):
+    path = (HISTORY / folder / name).resolve()
+    if path.parent.parent != HISTORY.resolve() or not path.is_file():
+        raise HTTPException(404, "Fichier introuvable")
+    return FileResponse(path, filename=path.name)
+
+
+@app.delete("/api/library/{folder}")
+def library_delete(folder: str):
+    path = (HISTORY / folder).resolve()
+    if path.parent != HISTORY.resolve() or not path.is_dir():
+        raise HTTPException(404, "Introuvable")
+    shutil.rmtree(path)
+    return {"ok": True}
+
+
+# ------------------------------------------------------------------ écouter une voix
+
+@app.post("/api/preview")
+def preview(data: dict = Body(...)):
+    if engine.runner.is_active:
+        raise HTTPException(409, "Un doublage est en cours.")
+    text = str(data.get("text") or "Bonjour ! Voici à quoi ressemble cette voix pour ton doublage.")[:300]
+    method = load_key("tts_method")
+    UPLOADS.mkdir(exist_ok=True)
+    out = UPLOADS / f".preview_{method}.{'mp3' if method == 'edge_tts' else 'wav'}"
+    out.unlink(missing_ok=True)
+    try:
+        if method == "edge_tts":
+            from core.tts_backend.edge_tts import edge_tts
+            edge_tts(text, str(out))
+        elif method == "kokoro_tts":
+            from core.tts_backend.kokoro_tts import kokoro_tts
+            kokoro_tts(text, str(out))
+        elif method == "chatterbox_tts":
+            from core.tts_backend.chatterbox_tts import chatterbox_tts
+            chatterbox_tts(text, str(out))  # sans la vidéo : voix par défaut, le clonage se fait pendant le doublage
+        else:
+            raise HTTPException(422, "Aperçu disponible pour Edge, Kokoro et Chatterbox.")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, f"La voix n'a pas pu être générée : {exc}") from exc
+    return FileResponse(out, media_type="audio/mpeg" if out.suffix == ".mp3" else "audio/wav")
+
+
+# ------------------------------------------------------------------ interface
+
+app.mount("/", StaticFiles(directory=WEB, html=True), name="web")
+
+
+def local_addresses():
+    addresses = set()
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("192.168.1.1", 80))
+            addresses.add(s.getsockname()[0])
+    except OSError:
+        pass
+    return sorted(a for a in addresses if not a.startswith("127."))
+
+
+if __name__ == "__main__":
+    import uvicorn
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+    print("\n  Doublage est prêt")
+    print(f"  Sur ce PC          : http://localhost:{PORT}")
+    for address in local_addresses():
+        print(f"  Téléphone (Wi-Fi)  : http://{address}:{PORT}")
+    print(f"  Mot de passe       : {password()}")
+    print("  (pour l'utiliser hors de chez toi, voir « Accès depuis partout » dans le README)\n")
+    uvicorn.run(app, host=HOST, port=PORT, log_level="warning")

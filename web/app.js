@@ -1,0 +1,505 @@
+"use strict";
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+
+// ---------------------------------------------------------------- données
+
+const LANGS = [
+  ["fr", "Français"], ["en", "Anglais", "English"], ["es", "Espagnol", "Español"], ["de", "Allemand", "Deutsch"],
+  ["it", "Italien", "Italiano"], ["pt", "Portugais", "Português"], ["nl", "Néerlandais", "Nederlands"],
+  ["ru", "Russe", "Русский"], ["pl", "Polonais", "Polski"], ["tr", "Turc", "Türkçe"], ["ar", "Arabe", "العربية"],
+  ["hi", "Hindi", "हिन्दी"], ["ja", "Japonais", "日本語"], ["ko", "Coréen", "한국어"], ["zh", "Chinois", "简体中文"],
+];
+
+const ENGINES = {
+  edge_tts: { name: "Edge", desc: "Gratuit, rapide, voix naturelles. Internet requis.", tag: "" },
+  kokoro_tts: { name: "Kokoro", desc: "Gratuit, 100 % sur ton PC, très léger.", tag: "local" },
+  chatterbox_tts: { name: "Chatterbox", desc: "Garde la voix d'origine, en local.", tag: "clone" },
+  fish_audio: { name: "Fish Audio", desc: "Clonage haut de gamme, payant.", tag: "clone" },
+};
+
+const EDGE = {
+  fr: [["fr-FR-HenriNeural", "Henri — homme"], ["fr-FR-DeniseNeural", "Denise — femme"], ["fr-FR-RemyMultilingualNeural", "Rémy — homme, très naturel"],
+       ["fr-FR-VivienneMultilingualNeural", "Vivienne — femme, très naturelle"], ["fr-FR-EloiseNeural", "Éloïse — jeune"],
+       ["fr-CA-AntoineNeural", "Antoine — Québec"], ["fr-CA-SylvieNeural", "Sylvie — Québec"], ["fr-BE-GerardNeural", "Gérard — Belgique"], ["fr-CH-ArianeNeural", "Ariane — Suisse"]],
+  en: [["en-US-AndrewMultilingualNeural", "Andrew — US"], ["en-US-AvaMultilingualNeural", "Ava — US"], ["en-US-GuyNeural", "Guy — US"], ["en-GB-RyanNeural", "Ryan — UK"], ["en-GB-SoniaNeural", "Sonia — UK"]],
+  es: [["es-ES-AlvaroNeural", "Álvaro — Espagne"], ["es-ES-ElviraNeural", "Elvira — Espagne"], ["es-MX-JorgeNeural", "Jorge — Mexique"], ["es-MX-DaliaNeural", "Dalia — Mexique"]],
+  de: [["de-DE-ConradNeural", "Conrad"], ["de-DE-KatjaNeural", "Katja"], ["de-DE-FlorianMultilingualNeural", "Florian"]],
+  it: [["it-IT-DiegoNeural", "Diego"], ["it-IT-ElsaNeural", "Elsa"], ["it-IT-GiuseppeMultilingualNeural", "Giuseppe"]],
+  pt: [["pt-BR-AntonioNeural", "Antônio — Brésil"], ["pt-BR-FranciscaNeural", "Francisca — Brésil"], ["pt-PT-DuarteNeural", "Duarte — Portugal"]],
+  nl: [["nl-NL-MaartenNeural", "Maarten"], ["nl-NL-ColetteNeural", "Colette"]],
+  ru: [["ru-RU-DmitryNeural", "Dmitry"], ["ru-RU-SvetlanaNeural", "Svetlana"]],
+  pl: [["pl-PL-MarekNeural", "Marek"], ["pl-PL-ZofiaNeural", "Zofia"]],
+  tr: [["tr-TR-AhmetNeural", "Ahmet"], ["tr-TR-EmelNeural", "Emel"]],
+  ar: [["ar-SA-HamedNeural", "Hamed"], ["ar-SA-ZariyahNeural", "Zariyah"]],
+  hi: [["hi-IN-MadhurNeural", "Madhur"], ["hi-IN-SwaraNeural", "Swara"]],
+  ja: [["ja-JP-KeitaNeural", "Keita"], ["ja-JP-NanamiNeural", "Nanami"]],
+  ko: [["ko-KR-InJoonNeural", "InJoon"], ["ko-KR-SunHiNeural", "SunHi"]],
+  zh: [["zh-CN-YunxiNeural", "Yunxi"], ["zh-CN-XiaoxiaoNeural", "Xiaoxiao"]],
+};
+
+const KOKORO = {
+  fr: [["ff_siwis", "Siwis — femme"]],
+  en: [["af_heart", "Heart — femme"], ["af_bella", "Bella — femme"], ["am_michael", "Michael — homme"], ["am_fenrir", "Fenrir — homme"], ["bf_emma", "Emma — UK"], ["bm_george", "George — UK"]],
+  es: [["ef_dora", "Dora — femme"], ["em_alex", "Alex — homme"]],
+  it: [["if_sara", "Sara — femme"], ["im_nicola", "Nicola — homme"]],
+  pt: [["pf_dora", "Dora — femme"], ["pm_alex", "Alex — homme"]],
+  hi: [["hf_alpha", "Alpha — femme"], ["hm_omega", "Omega — homme"]],
+  ja: [["jf_alpha", "Alpha — femme"], ["jm_kumo", "Kumo — homme"]],
+  zh: [["zf_xiaobei", "Xiaobei — femme"], ["zm_yunjian", "Yunjian — homme"]],
+};
+const CHATTERBOX_LANGS = new Set("ar da de el en es fi fr he hi it ja ko ms nl no pl pt ru sv sw tr zh".split(" "));
+
+const STEP_FR = {
+  "Prepare input": "Préparation de la vidéo",
+  "Word-level transcription and alignment": "Transcription de la voix",
+  "Sentence segmentation using NLP and LLM": "Découpage des phrases",
+  "Summarization and multi-step translation": "Traduction",
+  "Cutting and aligning long subtitles": "Calage des sous-titres",
+  "Merging subtitles into the video": "Vidéo sous-titrée",
+  "Finalize subtitle outputs": "Sous-titres prêts",
+  "Generate audio tasks and chunks": "Préparation du doublage",
+  "Extract reference audio": "Séparation voix et musique",
+  "Generate and merge audio files": "Génération des voix",
+  "Merge full audio": "Mixage",
+  "Merge final audio into video": "Montage final",
+  "Finalize dubbing outputs": "Finalisation",
+};
+const DUB_STEPS = Object.keys(STEP_FR);
+const SUB_STEPS = DUB_STEPS.slice(0, 7);
+
+const LLM_PRESETS = [
+  { id: "ollama", name: "Ollama — gratuit, sur ton PC", url: "http://localhost:11434/v1", model: "qwen3:8b", key: false,
+    hint: "Installe Ollama (ollama.com) puis lance « ollama pull qwen3:8b ». Aucun compte, aucun coût." },
+  { id: "deepseek", name: "DeepSeek — très bon marché", url: "https://api.deepseek.com", model: "deepseek-chat", key: true,
+    hint: "Clé sur platform.deepseek.com. Une vidéo de 10 min coûte quelques centimes." },
+  { id: "openai", name: "OpenAI", url: "https://api.openai.com/v1", model: "gpt-4.1-mini", key: true, hint: "Clé sur platform.openai.com." },
+  { id: "mistral", name: "Mistral (français)", url: "https://api.mistral.ai/v1", model: "mistral-small-latest", key: true, hint: "Clé sur console.mistral.ai." },
+  { id: "openrouter", name: "OpenRouter — tous les modèles", url: "https://openrouter.ai/api/v1", model: "google/gemini-2.5-flash", key: true, hint: "Clé sur openrouter.ai." },
+  { id: "custom", name: "Autre (compatible OpenAI)", url: "", model: "", key: true, hint: "N'importe quel service compatible avec l'API d'OpenAI." },
+];
+
+// ---------------------------------------------------------------- état
+
+let settings = {};
+let system = {};
+let source = "file";
+let mode = "dub";
+let engine = "edge_tts";
+let pickedFile = null;
+let polling = null;
+let lastMode = "dub";
+
+async function api(path, options = {}) {
+  const res = await fetch(path, options);
+  if (res.status === 401) { location.href = "/login"; throw new Error("401"); }
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail || detail; } catch {}
+    throw new Error(detail);
+  }
+  const type = res.headers.get("content-type") || "";
+  return type.includes("json") ? res.json() : res;
+}
+const post = (path, body) => api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+
+function toast(text, ms = 3200) {
+  const t = $("#toast");
+  t.textContent = text;
+  t.classList.add("show");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.remove("show"), ms);
+}
+
+function fill(select, items, value) {
+  select.innerHTML = items.map(([v, label]) => `<option value="${v}">${label}</option>`).join("");
+  if (value != null && items.some(([v]) => v === String(value))) select.value = String(value);
+}
+
+const fmtSize = (n) => n > 1e9 ? (n / 1e9).toFixed(1) + " Go" : (n / 1e6).toFixed(0) + " Mo";
+
+// ---------------------------------------------------------------- onglets
+
+function show(view) {
+  $$(".view").forEach((v) => v.classList.toggle("on", v.id === view));
+  $$("nav.tabs button").forEach((b) => b.classList.toggle("on", b.dataset.view === view));
+  if (view === "v-lib") loadLibrary();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+$$("nav.tabs button").forEach((b) => b.addEventListener("click", () => show(b.dataset.view)));
+document.addEventListener("click", (e) => {
+  const link = e.target.closest("[data-goto]");
+  if (link) { e.preventDefault(); show(link.dataset.goto); }
+});
+
+// ---------------------------------------------------------------- source
+
+$$("#src-seg button").forEach((b) => b.addEventListener("click", () => {
+  source = b.dataset.src;
+  $$("#src-seg button").forEach((x) => x.classList.toggle("on", x === b));
+  $$("[data-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.panel !== source));
+}));
+
+function pick(file) {
+  if (!file) return;
+  pickedFile = file;
+  $("#drop").classList.add("filled");
+  $("#drop-title").textContent = file.name;
+  $("#drop-sub").textContent = `${fmtSize(file.size)} · touche pour changer`;
+}
+$("#file").addEventListener("change", (e) => pick(e.target.files[0]));
+const drop = $("#drop");
+["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", (e) => pick(e.dataTransfer.files[0]));
+
+$$("#mode-seg button").forEach((b) => b.addEventListener("click", () => {
+  mode = b.dataset.mode;
+  $$("#mode-seg button").forEach((x) => x.classList.toggle("on", x === b));
+  $("#go").textContent = mode === "dub" ? "Lancer le doublage" : "Créer les sous-titres";
+}));
+
+// ---------------------------------------------------------------- langues et voix
+
+function dstCode() { return $("#dst-lang").value; }
+
+function renderEngines() {
+  const code = dstCode();
+  $("#engines").innerHTML = Object.entries(ENGINES).map(([id, e]) => {
+    const installed = system.engines ? system.engines[id] !== false : true;
+    const speaks = id === "kokoro_tts" ? !!KOKORO[code] : id === "chatterbox_tts" ? CHATTERBOX_LANGS.has(code) : true;
+    const why = !installed ? "Non installé — voir le README" : !speaks ? "Ne parle pas cette langue" : e.desc;
+    return `<button class="engine ${engine === id ? "on" : ""}" data-engine="${id}" ${installed && speaks ? "" : "disabled"}>
+      ${e.tag ? `<span class="tag">${e.tag}</span>` : ""}<b>${e.name}</b><small>${why}</small></button>`;
+  }).join("");
+  $$(".engine").forEach((b) => b.addEventListener("click", () => { engine = b.dataset.engine; renderEngines(); }));
+  renderVoices();
+}
+
+function renderVoices() {
+  const code = dstCode();
+  const field = $("#voice-field");
+  $("#fish-box").classList.toggle("hidden", engine !== "fish_audio");
+  $("#preview").classList.toggle("hidden", engine === "fish_audio");
+  if (engine === "edge_tts") {
+    field.classList.remove("hidden");
+    fill($("#voice"), EDGE[code] || EDGE.en, settings["edge_tts.voice"]);
+  } else if (engine === "kokoro_tts") {
+    field.classList.remove("hidden");
+    fill($("#voice"), KOKORO[code] || [], settings["kokoro_tts.voice"]);
+  } else {
+    field.classList.add("hidden");
+  }
+}
+
+$("#dst-lang").addEventListener("change", () => {
+  const code = dstCode();
+  const usable = (engine === "kokoro_tts" && !KOKORO[code]) || (engine === "chatterbox_tts" && !CHATTERBOX_LANGS.has(code));
+  if (usable) engine = "edge_tts";
+  renderEngines();
+});
+
+function voiceSettings() {
+  const out = { tts_method: engine, dubbing_language_code: dstCode() };
+  if (engine === "edge_tts") out["edge_tts.voice"] = $("#voice").value;
+  if (engine === "kokoro_tts") out["kokoro_tts.voice"] = $("#voice").value;
+  if (engine === "fish_audio") { out["fish_audio.mode"] = "clone"; out["fish_audio.api_key"] = $("#fish-key").value.trim(); }
+  out.burn_subtitles = $("#burn").checked;
+  return out;
+}
+
+$("#preview").addEventListener("click", async () => {
+  const btn = $("#preview");
+  btn.disabled = true;
+  btn.lastChild.textContent = "Génération…";
+  try {
+    settings = await post("/api/settings", voiceSettings());
+    const lang = LANGS.find(([c]) => c === dstCode());
+    const sample = {
+      fr: "Bonjour ! Voici à quoi ressemblera ta vidéo une fois doublée.",
+      en: "Hello! This is how your video will sound once it is dubbed.",
+      es: "¡Hola! Así sonará tu vídeo una vez doblado.",
+    }[dstCode()];
+    const res = await fetch("/api/preview", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: sample || (lang ? lang[2] || lang[1] : "") }) });
+    if (!res.ok) throw new Error((await res.json()).detail);
+    const audio = $("#preview-audio");
+    audio.src = URL.createObjectURL(await res.blob());
+    await audio.play();
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.lastChild.textContent = "Écouter";
+  }
+});
+
+// ---------------------------------------------------------------- envoi par morceaux
+
+async function upload(file, onProgress) {
+  const id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()).replace(/[^a-zA-Z0-9]/g, "").slice(0, 32);
+  const CHUNK = 32 * 1024 * 1024;
+  let offset = 0;
+  while (offset < file.size) {
+    const end = Math.min(offset + CHUNK, file.size);
+    let res;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        res = await fetch(`/api/upload/${id}?offset=${offset}`, { method: "POST", body: file.slice(offset, end) });
+        if (res.ok || res.status === 409) break;
+      } catch (e) { if (attempt === 3) throw new Error("Connexion perdue pendant l'envoi"); }
+      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+    }
+    if (!res) throw new Error("Connexion perdue pendant l'envoi");
+    if (res.status === 401) { location.href = "/login"; return; }
+    const data = await res.json();
+    if (!res.ok && res.status !== 409) throw new Error(data.detail || "Envoi refusé");
+    offset = data.size;
+    onProgress(offset / file.size);
+  }
+  return post(`/api/upload/${id}/finish?name=${encodeURIComponent(file.name)}`);
+}
+
+// ---------------------------------------------------------------- lancer
+
+$("#go").addEventListener("click", async () => {
+  let src;
+  if (source === "url") {
+    src = $("#url").value.trim();
+    if (!/^https?:\/\//.test(src)) return toast("Colle un lien qui commence par https://");
+  } else if (!pickedFile) {
+    return toast("Choisis d'abord une vidéo");
+  }
+  const go = $("#go");
+  go.disabled = true;
+  try {
+    settings = await post("/api/settings", voiceSettings());
+    if (source === "file") {
+      showRun({ state: "running", step: null, total_steps: 0 });
+      $("#run-title").textContent = "Envoi de la vidéo";
+      const up = await upload(pickedFile, (p) => {
+        $("#run-step").textContent = `Envoi… ${fmtSize(pickedFile.size * p)} / ${fmtSize(pickedFile.size)}`;
+        $("#run-pct").textContent = Math.round(p * 100) + " %";
+        $("#bar").style.width = p * 100 + "%";
+      });
+      src = up.path;
+    }
+    const lang = LANGS.find(([c]) => c === dstCode());
+    lastMode = mode;
+    await post("/api/job", {
+      source: src, mode,
+      target_language: lang[1],
+      dubbing_language_code: lang[0],
+      source_language: $("#src-lang").value,
+    });
+    startPolling();
+  } catch (err) {
+    toast(err.message, 5000);
+    $("#run").classList.add("hidden");
+    $("#setup").classList.remove("hidden");
+  } finally {
+    go.disabled = false;
+  }
+});
+
+// ---------------------------------------------------------------- progression
+
+function showRun(s) {
+  $("#setup").classList.add("hidden");
+  $("#result").classList.add("hidden");
+  $("#run").classList.remove("hidden");
+  const labels = (s.total_steps && s.total_steps <= SUB_STEPS.length) || lastMode === "subtitles" ? SUB_STEPS : DUB_STEPS;
+  const index = s.step_index ?? -1;
+  const pct = s.state === "completed" ? 100 : Math.max(2, Math.round(((index + 0.5) / (s.total_steps || labels.length)) * 100));
+  $("#run-title").textContent = { running: "En cours", paused: "En pause", stopping: "Arrêt…", stopped: "Arrêté", error: "Erreur", completed: "Terminé" }[s.state] || "En cours";
+  $("#run-step").textContent = s.step ? STEP_FR[s.step] || s.step : "Préparation…";
+  $("#run-pct").textContent = (s.state === "running" ? pct : s.state === "completed" ? 100 : pct) + " %";
+  $("#bar").style.width = pct + "%";
+  $("#steps").innerHTML = labels.map((label, i) =>
+    `<li class="${i < index || s.state === "completed" ? "done" : i === index ? "now" : ""}">${STEP_FR[label]}</li>`).join("");
+  const err = $("#run-error");
+  err.classList.toggle("hidden", !s.error);
+  err.textContent = s.error ? explain(s.error) : "";
+  const pause = $("#run-pause");
+  pause.classList.toggle("hidden", !s.pause_message);
+  pause.textContent = s.pause_message || "";
+  const active = ["running", "paused", "stopping"].includes(s.state);
+  $("#stop").classList.toggle("hidden", !active);
+  $("#resume").classList.toggle("hidden", s.state !== "paused");
+  $("#retry").classList.toggle("hidden", !["error", "stopped"].includes(s.state));
+  $("#new1").classList.toggle("hidden", active);
+}
+
+function explain(error) {
+  if (/api|key|401|auth|connection|connect/i.test(error)) return "La traduction n'a pas pu joindre l'IA. Vérifie le service et la clé dans Réglages. Détail : " + error;
+  if (/kokoro|chatterbox/i.test(error) && /install/i.test(error)) return error;
+  return error;
+}
+
+function showResult(files) {
+  $("#run").classList.add("hidden");
+  $("#setup").classList.add("hidden");
+  $("#result").classList.remove("hidden");
+  const video = files.includes("output_dub.mp4") ? "output_dub.mp4" : files.includes("output_sub.mp4") ? "output_sub.mp4" : null;
+  const player = $("#player");
+  if (video) {
+    player.classList.remove("hidden");
+    const src = `/api/files/${video}`;
+    if (!player.src.endsWith(src)) player.src = src;
+  } else {
+    player.classList.add("hidden");
+  }
+  const names = { "output_dub.mp4": "Vidéo doublée", "output_sub.mp4": "Vidéo sous-titrée", "trans.srt": "Sous-titres traduits", "src.srt": "Sous-titres d'origine", "dub.mp3": "Voix seule" };
+  $("#downloads").innerHTML = Object.entries(names).filter(([f]) => files.includes(f))
+    .map(([f, label]) => `<a class="btn small" href="/api/files/${f}" download>${label}</a>`).join("");
+}
+
+async function poll() {
+  try {
+    const s = await api("/api/status");
+    if (["running", "paused", "stopping"].includes(s.state)) {
+      showRun(s);
+    } else {
+      stopPolling();
+      if (s.state === "completed" && s.files.some((f) => f.startsWith("output_"))) showResult(s.files);
+      else if (s.state === "error" || s.state === "stopped") showRun(s);
+    }
+  } catch (e) { /* réseau coupé : on réessaie au prochain tour */ }
+}
+function startPolling() { stopPolling(); poll(); polling = setInterval(poll, 2000); }
+function stopPolling() { clearInterval(polling); polling = null; }
+document.addEventListener("visibilitychange", () => { if (!document.hidden && !polling) poll(); });
+
+function newJob() {
+  stopPolling();
+  $("#player").pause();
+  $("#run").classList.add("hidden");
+  $("#result").classList.add("hidden");
+  $("#setup").classList.remove("hidden");
+}
+$("#new1").addEventListener("click", newJob);
+$("#new2").addEventListener("click", newJob);
+$("#stop").addEventListener("click", async () => { await post("/api/stop"); toast("Arrêt demandé"); });
+$("#resume").addEventListener("click", async () => { await post("/api/resume"); startPolling(); });
+$("#retry").addEventListener("click", async () => {
+  try {
+    await post("/api/run", { stage: "all", dubbing: lastMode === "dub" });
+    startPolling();
+  } catch (err) { toast(err.message); }
+});
+
+// ---------------------------------------------------------------- bibliothèque
+
+async function loadLibrary() {
+  const box = $("#lib");
+  box.innerHTML = `<div class="empty">Chargement…</div>`;
+  const items = await api("/api/library");
+  if (!items.length) {
+    box.innerHTML = `<div class="glass card empty">Rien pour l'instant.<br>Tes vidéos apparaîtront ici après chaque nouveau doublage.</div>`;
+    return;
+  }
+  box.innerHTML = items.map((it, i) => `
+    <div class="glass lib-item">
+      <div class="thumb"><svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></div>
+      <div class="meta"><b>${escapeHtml(it.title)}</b><small>${new Date(it.date * 1000).toLocaleDateString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</small></div>
+      <button class="btn small" data-play="${i}">Voir</button>
+      <button class="btn small ghost danger" data-del="${i}" aria-label="Supprimer">✕</button>
+    </div>`).join("");
+  box.querySelectorAll("[data-play]").forEach((b) => b.addEventListener("click", () => {
+    const it = items[b.dataset.play];
+    const base = `/api/library/${encodeURIComponent(it.id)}/`;
+    $("#lib-player-card").classList.remove("hidden");
+    $("#lib-player").src = base + it.video;
+    $("#lib-downloads").innerHTML = it.files.map((f) => `<a class="btn small" href="${base + encodeURIComponent(f)}" download>${f}</a>`).join("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }));
+  box.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", async () => {
+    const it = items[b.dataset.del];
+    if (!confirm(`Supprimer « ${it.title} » ?`)) return;
+    await api(`/api/library/${encodeURIComponent(it.id)}`, { method: "DELETE" });
+    loadLibrary();
+  }));
+}
+const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// ---------------------------------------------------------------- réglages
+
+function presetFor(url) {
+  return LLM_PRESETS.find((p) => p.id !== "custom" && url && url.replace(/\/$/, "") === p.url) || LLM_PRESETS.at(-1);
+}
+function applyPreset(p, keepValues) {
+  if (!keepValues && p.id !== "custom") { $("#llm-url").value = p.url; $("#llm-model").value = p.model; }
+  $("#llm-key-field").classList.toggle("hidden", !p.key);
+  $("#llm-hint").textContent = p.hint;
+}
+fill($("#llm-preset"), LLM_PRESETS.map((p) => [p.id, p.name]));
+$("#llm-preset").addEventListener("change", () => applyPreset(LLM_PRESETS.find((p) => p.id === $("#llm-preset").value)));
+
+function renderSettings() {
+  const url = settings["api.base_url"] || "";
+  const preset = presetFor(url);
+  $("#llm-preset").value = preset.id;
+  $("#llm-url").value = url;
+  $("#llm-model").value = settings["api.model"] || "";
+  applyPreset(preset, true);
+  const key = settings["api.key"];
+  $("#llm-key").placeholder = key && key.set ? `Clé enregistrée (…${key.end}) — laisser vide pour la garder` : "Colle ta clé ici";
+  const fish = settings["fish_audio.api_key"];
+  $("#fish-key").placeholder = fish && fish.set ? `Clé enregistrée (…${fish.end})` : "Colle ta clé fish.audio";
+  $("#ytb").value = String(settings.ytb_resolution || "1080");
+  $("#demucs").checked = !!settings.demucs;
+  $("#cb-exag").value = String(settings["chatterbox_tts.exaggeration"] ?? 0.5);
+  $("#burn").checked = settings.burn_subtitles !== false;
+  if (ENGINES[settings.tts_method]) engine = settings.tts_method;
+  const code = settings.dubbing_language_code || "fr";
+  if (LANGS.some(([c]) => c === code)) $("#dst-lang").value = code;
+  $("#src-lang").value = LANGS.some(([c]) => c === settings["whisper.language"]) ? settings["whisper.language"] : "auto";
+  $("#llm-warn").classList.toggle("hidden", !!system.llm_ready);
+}
+
+$("#save").addEventListener("click", async () => {
+  const preset = LLM_PRESETS.find((p) => p.id === $("#llm-preset").value);
+  const url = $("#llm-url").value.trim();
+  const local = /localhost|127\.0\.0\.1/.test(url);
+  try {
+    settings = await post("/api/settings", {
+      "api.base_url": url,
+      "api.model": $("#llm-model").value.trim(),
+      "api.key": preset.key ? $("#llm-key").value.trim() : (local ? "ollama" : ""),
+      "max_workers": local ? 1 : 4,
+      "ytb_resolution": $("#ytb").value,
+      "demucs": $("#demucs").checked,
+      "chatterbox_tts.exaggeration": $("#cb-exag").value,
+    });
+    $("#llm-key").value = "";
+    system = await api("/api/system");
+    renderSettings();
+    renderSystem();
+    toast("Réglages enregistrés");
+  } catch (err) { toast(err.message); }
+});
+
+$("#logout").addEventListener("click", async () => { await post("/logout"); location.href = "/login"; });
+
+function renderSystem() {
+  const pill = $("#sys");
+  pill.innerHTML = `<span class="dot ${system.gpu ? "ok" : "warn"}"></span>${system.gpu ? "Carte graphique OK" : "Sans carte graphique"}`;
+  const installed = Object.entries(system.engines || {}).filter(([, v]) => v).map(([k]) => (ENGINES[k] || { name: k === "demucs" ? "Séparation voix/musique" : k }).name);
+  $("#sys-detail").innerHTML = `${system.gpu ? "Carte graphique : " + escapeHtml(system.gpu) : "Aucune carte graphique détectée : ça marche, mais plus lentement."}<br>Installé : ${installed.join(", ") || "—"}`;
+}
+
+// ---------------------------------------------------------------- démarrage
+
+(async function init() {
+  fill($("#src-lang"), [["auto", "Détection auto"], ...LANGS.map(([c, n]) => [c, n])], "auto");
+  fill($("#dst-lang"), LANGS.map(([c, n]) => [c, n]), "fr");
+  try {
+    [settings, system] = await Promise.all([api("/api/settings"), api("/api/system")]);
+  } catch (e) { return; }
+  renderSettings();
+  renderSystem();
+  renderEngines();
+  const s = await api("/api/status");
+  if (["running", "paused", "stopping"].includes(s.state)) startPolling();
+  else if (s.files.some((f) => f.startsWith("output_dub") || f.startsWith("output_sub"))) showResult(s.files);
+})();

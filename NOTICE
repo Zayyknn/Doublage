@@ -1,0 +1,17 @@
+Doublage
+Copyright 2026 Zayyknn
+
+Ce projet est dérivé de VideoLingo (https://github.com/Huanshere/VideoLingo),
+Copyright Huanshere et contributeurs, sous licence Apache 2.0,
+à partir du commit 01f843492759be9bbfd1a5cb697b799cc9de1609.
+
+Modifications : application web Doublage (web.py, web/), voix locales Kokoro et
+Chatterbox (core/tts_backend/kokoro_tts.py, chatterbox_tts.py, lang.py),
+réglages par défaut en français, lanceurs Windows/Mac/Linux.
+
+Composants utilisés au moment de l'exécution, installés séparément :
+- Kokoro-82M (hexgrad), Apache 2.0
+- Chatterbox (Resemble AI), MIT
+- Demucs (Meta), MIT
+- yt-dlp, Unlicense
+- edge-tts, LGPL-3.0
