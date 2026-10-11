@@ -9,6 +9,9 @@
 
 display_language: "fr"
 
+# Traduction : 'google' (gratuit, rien à installer) ou 'llm' (Ollama ou une API ci-dessous, plus naturel)
+translation_engine: 'google'
+
 # API settings
 api:
   key: 'YOUR_API_KEY'

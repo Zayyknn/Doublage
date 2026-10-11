@@ -133,6 +133,18 @@
       <label class="field"><span>Modèle</span><input type="text" id="llm-model"></label>
       <label class="field" id="llm-key-field"><span>Clé API</span><input type="password" id="llm-key" placeholder="Laisser vide pour garder la clé enregistrée"></label>
       <p class="hint" id="llm-hint"></p>
+      <div id="ollama-box" class="hidden"></div>
+    </div>
+
+    <div class="glass card">
+      <h2>Téléphone</h2>
+      <div id="phone-box"></div>
+    </div>
+
+    <div class="glass card">
+      <h2>Voix locales</h2>
+      <p style="margin:0 0 12px;color:var(--muted)">Kokoro (gratuit, hors ligne) et Chatterbox (garde la voix d'origine). Environ 4 Go.</p>
+      <div id="voices-box"></div>
     </div>
 
     <div class="glass card">
@@ -149,9 +161,21 @@
     <div class="glass card" style="margin-top:14px">
       <h2>Ce PC</h2>
       <p id="sys-detail" style="margin:0 0 14px;color:var(--muted)"></p>
-      <button class="btn small ghost" id="logout">Se déconnecter</button>
+      <div class="btns"><button class="btn small" id="rerun-wizard">Relancer l'assistant</button>
+      <button class="btn small ghost" id="logout">Se déconnecter</button></div>
     </div>
   </section>
+</div>
+
+<div class="wizard hidden" id="wizard">
+  <div class="glass wiz-card">
+    <div class="wiz-dots" id="wiz-dots"></div>
+    <div id="wiz-body"></div>
+    <div class="wiz-nav">
+      <button class="btn ghost" id="wiz-back">Retour</button>
+      <button class="btn primary" id="wiz-next">Continuer</button>
+    </div>
+  </div>
 </div>
 
 <nav class="tabs glass">
@@ -161,5 +185,6 @@
 </nav>
 
 <script src="/app.js"></script>
+<script src="/setup.js"></script>
 </body>
 </html>

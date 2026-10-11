@@ -49,6 +49,11 @@ def get_summary():
     if len(custom_terms) > 0:
         rprint(f"📖 Custom Terms Loaded: {len(custom_terms)} terms")
         rprint("📝 Terms Content:", json.dumps(custom_terms_json, indent=2, ensure_ascii=False))
+    from core.free_translate import using_free_translation
+    if using_free_translation():  # pas d'IA : pas de résumé, seulement le glossaire de l'utilisateur
+        with open(_4_1_TERMINOLOGY, 'w', encoding='utf-8') as f:
+            json.dump({"theme": "", "terms": custom_terms_json['terms']}, f, ensure_ascii=False, indent=4)
+        return
     summary_prompt = get_summary_prompt(src_content, custom_terms_json)
     rprint("📝 Summarizing and extracting terminology ...")
     

@@ -32,7 +32,10 @@ def check_len_then_trim(text, duration):
             if 'result' not in response:
                 return {'status': 'error', 'message': 'No result in response'}
             return {'status': 'success', 'message': ''}
-        try:    
+        try:
+            from core.free_translate import using_free_translation
+            if using_free_translation():
+                raise RuntimeError("pas d'IA")
             response = ask_gpt(prompt, resp_type='json', log_title='sub_trim', valid_def=valid_trim)
             shortened_text = response['result']
         except Exception:

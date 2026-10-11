@@ -179,3 +179,4 @@ videolingo_*.log
 /uploads/
 .doublage_password
 .tunnel.log
+/tools/

@@ -77,6 +77,9 @@ def mechanical_split(sentence, num_parts):
 
 def split_sentence(sentence, num_parts, word_limit=20, index=-1, retry_attempt=0):
     """Split a long sentence using GPT and return the result as a string."""
+    from core.free_translate import using_free_translation
+    if using_free_translation():
+        return mechanical_split(sentence, num_parts)
     split_prompt = get_split_prompt(sentence, num_parts, word_limit)
     def valid_split(response_data):
         if pick_split(response_data) is None:

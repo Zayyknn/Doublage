@@ -47,8 +47,12 @@ def get_target_parts(response_data, num_parts):
     return parts
 
 def align_subs(src_sub: str, tr_sub: str, src_part: str) -> Tuple[List[str], List[str], str]:
-    align_prompt = get_align_prompt(src_sub, tr_sub, src_part)
     src_parts = src_part.split('\n')
+    from core.free_translate import using_free_translation, split_like
+    if using_free_translation():
+        tr_parts = split_like(str(tr_sub), src_parts)
+        return src_parts, tr_parts, " ".join(tr_parts)
+    align_prompt = get_align_prompt(src_sub, tr_sub, src_part)
     
     def valid_align(response_data):
         if 'align' not in response_data:

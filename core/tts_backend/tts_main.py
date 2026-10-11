@@ -43,7 +43,8 @@ def tts_main(text, save_as, number, task_df):
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            if attempt >= max_retries - 1:
+            from core.free_translate import using_free_translation
+            if attempt >= max_retries - 1 and not using_free_translation():
                 print("Asking GPT to correct text...")
                 correct_text = ask_gpt(get_correct_text_prompt(text),resp_type="json", log_title='tts_correct_text')
                 text = correct_text['text']

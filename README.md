@@ -18,69 +18,43 @@ depuis n'importe quel navigateur, et s'installe comme une appli sur le télépho
 | Voix 100 % locale, légère | [Kokoro-82M](https://github.com/hexgrad/kokoro) (Apache 2.0) | Gratuit, hors ligne, tourne même sans carte graphique |
 | Clonage de la voix d'origine | [Chatterbox Multilingual](https://github.com/resemble-ai/chatterbox) (MIT) | La personne de la vidéo « parle » français avec sa propre voix |
 | Clonage haut de gamme (option payante) | Fish Audio, CosyVoice2 via SiliconFlow | Pour la meilleure qualité |
-| Traduction | Ollama (gratuit, local) ou toute API compatible OpenAI | DeepSeek, Mistral, OpenAI, OpenRouter… |
-| Interface web mobile, envoi par morceaux, bibliothèque, mot de passe | Écrit pour Doublage | Utilisable depuis le téléphone, même hors de chez toi |
+| Traduction gratuite sans IA | Google Traduction (comme pyVideoTrans) | Marche sans rien installer |
+| Traduction par IA | Ollama (gratuit, local) ou toute API compatible OpenAI | Plus naturelle : DeepSeek, Mistral, OpenAI… |
+| Interface web mobile, assistant de configuration, tunnel intégré, bibliothèque | Écrit pour Doublage | Utilisable depuis le téléphone, même hors de chez toi |
 
 Ce qui n'a **pas** été repris, et pourquoi : pyVideoTrans (licence GPL-3 et une appli de bureau séparée ;
 ses meilleures idées — voix multiples, YouTube, clonage — sont déjà couvertes ici), open-dubbing
 (mêmes briques Whisper + TTS, en moins complet), XTTS v2 (licence non commerciale, et Chatterbox fait mieux).
 L'interface d'origine de VideoLingo reste disponible pour les réglages avancés (`uv run start.py --streamlit`).
 
-## Installation (Windows)
+## Installation
 
-1. Télécharge le dépôt : bouton vert **Code → Download ZIP**, puis dézippe-le (ou `git clone`).
-2. Double-clique **`Lancer-Doublage.bat`**. Le premier lancement installe tout (10 à 20 minutes).
-3. La console affiche l'adresse et le **mot de passe** :
-   - sur le PC : http://localhost:8765
-   - sur le téléphone, sur le même Wi-Fi : http://192.168.x.x:8765
+**Rien à configurer à la main.** Télécharge le dépôt (bouton vert **Code → Download ZIP**), dézippe-le, puis :
 
-## Installation (Mac)
+- **Windows** : double-clique **`Lancer-Doublage.bat`**
+- **Mac** : double-clique **`Lancer-Doublage.command`** (la 1re fois : clic droit → Ouvrir → Ouvrir)
+- **Linux** : `./lancer-doublage.sh`
 
-Un Mac Apple Silicon (M1, M2, M3, M4…) est idéal : la transcription utilise la puce Apple (MLX).
-Un Mac Intel fonctionne, mais lentement.
+Le premier lancement installe tout seul ce qu'il faut (10 à 20 minutes). Ensuite la page s'ouvre
+dans le navigateur et un **assistant** guide en 3 écrans :
 
-1. Télécharge le ZIP depuis GitHub et dézippe-le (dans Documents, par exemple).
-2. Double-clique **`Lancer-Doublage.command`**. La première fois, macOS le bloque : fais **clic droit → Ouvrir → Ouvrir**.
-   Si macOS refuse toujours : Réglages Système → Confidentialité et sécurité → **Ouvrir quand même**.
-3. Le premier lancement installe tout (10 à 20 minutes). Ensuite, ouvre http://localhost:8765
-   et entre le mot de passe affiché dans le Terminal.
-4. Traduction : installe [Ollama pour Mac](https://ollama.com), puis dans le Terminal : `ollama pull qwen3:8b`.
+1. **Traduction** : *Gratuit, tout de suite* (Google Traduction, rien à installer), *Gratuit et plus naturel*
+   (Ollama : un bouton pour le télécharger, un autre pour récupérer le modèle, avec la progression), ou une clé API.
+2. **Voix** : les voix Edge sont prêtes ; un bouton installe en arrière-plan les voix locales Kokoro et Chatterbox.
+3. **Téléphone** : QR code pour l'ouvrir sur le même Wi-Fi, et un interrupteur « Accès depuis partout »
+   qui télécharge et lance tout seul un tunnel Cloudflare gratuit (QR code et mot de passe affichés).
 
-Voix locales : `Installer-Voix-Locales.command`. Accès depuis partout : `brew install cloudflared`,
-puis relance Doublage ; l'adresse https://….trycloudflare.com est écrite dans le fichier `.tunnel.log`.
+Laisse la fenêtre noire (Terminal) ouverte pendant l'utilisation : c'est le moteur.
+Tout se règle ensuite dans l'onglet **Réglages**, où l'assistant peut être relancé.
 
-Linux : `./lancer-doublage.sh`.
-
-### La traduction : choisis une IA (Réglages → Traduction)
-
-- **Ollama, gratuit** : installe [Ollama](https://ollama.com), puis `ollama pull qwen3:8b`. Rien d'autre à faire.
-- **DeepSeek, quelques centimes par vidéo** : crée une clé sur platform.deepseek.com et colle-la dans Réglages.
-
-### Voix locales (optionnel)
-
-Double-clique **`Installer-Voix-Locales.bat`** (ou `uv run start.py --voix`) pour ajouter Kokoro et Chatterbox.
-Chatterbox télécharge environ 3 Go au premier doublage et demande une carte NVIDIA pour aller vite.
-
-## Accès depuis partout (4G, travail…)
-
-Installe `cloudflared` une fois :
-
-```
-winget install --id Cloudflare.cloudflared
-```
-
-`Lancer-Doublage.bat` ouvre alors aussi un tunnel Cloudflare gratuit, sans compte : une adresse
-`https://quelque-chose.trycloudflare.com` s'affiche dans la deuxième fenêtre. Ouvre-la sur le téléphone,
-entre le mot de passe, puis **Partager → Sur l'écran d'accueil** pour l'avoir comme une appli.
-L'adresse change à chaque lancement ; pour une adresse fixe sur ton propre domaine, crée un tunnel nommé
-dans le tableau de bord Cloudflare (Zero Trust → Tunnels) pointant vers `http://localhost:8765`.
-
-Les vidéos sont envoyées par morceaux de 32 Mo, donc la limite de 100 Mo des tunnels gratuits ne gêne pas.
+Sur Mac, une puce Apple (M1, M2, M3, M4…) est idéale. Sur PC, une carte NVIDIA accélère beaucoup ;
+sans elle, ça marche, plus lentement. Prévoir environ 15 Go d'espace libre.
 
 ## Mot de passe
 
-Créé au premier lancement dans le fichier `.doublage_password` (jamais envoyé sur GitHub).
-Modifie ce fichier, ou définis la variable `DOUBLAGE_MOT_DE_PASSE`, pour le changer.
+Sur l'ordinateur lui-même, aucun mot de passe n'est demandé. Depuis un téléphone ou un autre appareil,
+le mot de passe affiché dans l'assistant (et dans la fenêtre noire) est demandé une fois.
+Il est rangé dans `.doublage_password` ; modifie ce fichier ou la variable `DOUBLAGE_MOT_DE_PASSE` pour le changer.
 
 ## Bon à savoir
 

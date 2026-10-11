@@ -69,8 +69,10 @@ const DUB_STEPS = Object.keys(STEP_FR);
 const SUB_STEPS = DUB_STEPS.slice(0, 7);
 
 const LLM_PRESETS = [
-  { id: "ollama", name: "Ollama — gratuit, sur ton PC", url: "http://localhost:11434/v1", model: "qwen3:8b", key: false,
-    hint: "Installe Ollama (ollama.com) puis lance « ollama pull qwen3:8b ». Aucun compte, aucun coût." },
+  { id: "google", name: "Google Traduction — gratuit, rien à installer", url: "", model: "", key: false, fields: false,
+    hint: "Marche tout de suite. Traduction un peu plus littérale qu'avec une IA." },
+  { id: "ollama", name: "Ollama — gratuit, sur ton ordi, plus naturel", url: "http://localhost:11434/v1", model: "qwen2.5:7b", key: false, fields: false,
+    hint: "Une IA qui tourne sur ton ordi : aucun compte, aucun coût." },
   { id: "deepseek", name: "DeepSeek — très bon marché", url: "https://api.deepseek.com", model: "deepseek-chat", key: true,
     hint: "Clé sur platform.deepseek.com. Une vidéo de 10 min coûte quelques centimes." },
   { id: "openai", name: "OpenAI", url: "https://api.openai.com/v1", model: "gpt-4.1-mini", key: true, hint: "Clé sur platform.openai.com." },
@@ -425,12 +427,18 @@ const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&l
 // ---------------------------------------------------------------- réglages
 
 function presetFor(url) {
-  return LLM_PRESETS.find((p) => p.id !== "custom" && url && url.replace(/\/$/, "") === p.url) || LLM_PRESETS.at(-1);
+  if (settings.translation_engine === "google") return LLM_PRESETS[0];
+  return LLM_PRESETS.find((p) => p.url && url && url.replace(/\/$/, "") === p.url) || LLM_PRESETS.at(-1);
 }
 function applyPreset(p, keepValues) {
-  if (!keepValues && p.id !== "custom") { $("#llm-url").value = p.url; $("#llm-model").value = p.model; }
+  if (!keepValues && p.url) { $("#llm-url").value = p.url; $("#llm-model").value = p.model; }
+  const fields = p.fields !== false;
+  $("#llm-url").closest(".field").classList.toggle("hidden", !fields);
+  $("#llm-model").closest(".field").classList.toggle("hidden", !fields);
   $("#llm-key-field").classList.toggle("hidden", !p.key);
   $("#llm-hint").textContent = p.hint;
+  $("#ollama-box").classList.toggle("hidden", p.id !== "ollama");
+  if (p.id === "ollama" && window.renderOllama) window.renderOllama($("#ollama-box"));
 }
 fill($("#llm-preset"), LLM_PRESETS.map((p) => [p.id, p.name]));
 $("#llm-preset").addEventListener("change", () => applyPreset(LLM_PRESETS.find((p) => p.id === $("#llm-preset").value)));
@@ -462,11 +470,16 @@ $("#save").addEventListener("click", async () => {
   const url = $("#llm-url").value.trim();
   const local = /localhost|127\.0\.0\.1/.test(url);
   try {
-    settings = await post("/api/settings", {
+    if (preset.id === "google" || preset.id === "ollama") await post("/api/setup/translation", { engine: preset.id });
+    const llm = preset.id === "google" || preset.id === "ollama" ? {} : {
+      "translation_engine": "llm",
       "api.base_url": url,
       "api.model": $("#llm-model").value.trim(),
       "api.key": preset.key ? $("#llm-key").value.trim() : (local ? "ollama" : ""),
       "max_workers": local ? 1 : 4,
+    };
+    settings = await post("/api/settings", {
+      ...llm,
       "ytb_resolution": $("#ytb").value,
       "demucs": $("#demucs").checked,
       "chatterbox_tts.exaggeration": $("#cb-exag").value,
@@ -479,6 +492,7 @@ $("#save").addEventListener("click", async () => {
   } catch (err) { toast(err.message); }
 });
 
+$("#rerun-wizard").addEventListener("click", () => window.openWizard && window.openWizard());
 $("#logout").addEventListener("click", async () => { await post("/logout"); location.href = "/login"; });
 
 function renderSystem() {
@@ -487,6 +501,10 @@ function renderSystem() {
   const installed = Object.entries(system.engines || {}).filter(([, v]) => v).map(([k]) => (ENGINES[k] || { name: k === "demucs" ? "Séparation voix/musique" : k }).name);
   $("#sys-detail").innerHTML = `${system.gpu ? "Carte graphique : " + escapeHtml(system.gpu) : "Aucune carte graphique détectée : ça marche, mais plus lentement."}<br>Installé : ${installed.join(", ") || "—"}`;
 }
+
+window.doublage = { api, post, toast, get settings() { return settings; }, set settings(v) { settings = v; },
+  get system() { return system; }, set system(v) { system = v; }, renderSettings: () => renderSettings(), renderEngines: () => renderEngines(),
+  renderSystem: () => renderSystem() };
 
 // ---------------------------------------------------------------- démarrage
 
@@ -499,6 +517,7 @@ function renderSystem() {
   renderSettings();
   renderSystem();
   renderEngines();
+  if (window.initSetup) window.initSetup();
   const s = await api("/api/status");
   if (["running", "paused", "stopping"].includes(s.state)) startPolling();
   else if (s.files.some((f) => f.startsWith("output_dub") || f.startsWith("output_sub"))) showResult(s.files);

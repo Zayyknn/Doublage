@@ -13,7 +13,10 @@ import secrets
 import shutil
 import socket
 import sys
+import subprocess
+import threading
 import time
+import webbrowser
 from importlib.util import find_spec
 from pathlib import Path
 from urllib.parse import urlparse
@@ -25,6 +28,7 @@ from fastapi.staticfiles import StaticFiles
 ROOT = Path(__file__).resolve().parent
 os.chdir(ROOT)  # le moteur travaille avec des chemins relatifs (config.yaml, output/)
 
+import requests  # noqa: E402
 import api as engine  # noqa: E402  (FastAPI du moteur : /input, /run, /status, /files…)
 from core.pipeline import get_steps  # noqa: E402
 from core.utils.config_utils import load_key, load_key_or, update_key  # noqa: E402
@@ -60,10 +64,18 @@ def session_token() -> str:
 app = FastAPI(title="Doublage", docs_url=None, redoc_url=None)
 
 
+def is_local(request: Request) -> bool:
+    """Ouvert sur le PC lui-même : pas de mot de passe. Le tunnel arrive aussi en local,
+    mais avec les en-têtes de Cloudflare, donc il demande le mot de passe."""
+    host = request.client.host if request.client else ""
+    proxied = any(h in request.headers for h in ("cf-connecting-ip", "x-forwarded-for", "cf-ray"))
+    return host in {"127.0.0.1", "::1", "localhost"} and not proxied
+
+
 @app.middleware("http")
 async def require_login(request: Request, call_next):
     path = request.url.path
-    ok = hmac.compare_digest(request.cookies.get(COOKIE, ""), session_token())
+    ok = is_local(request) or hmac.compare_digest(request.cookies.get(COOKIE, ""), session_token())
     if ok or path in PUBLIC:
         return await call_next(request)
     if path.startswith("/api/"):
@@ -97,7 +109,7 @@ def logout():
 
 SECRETS = {"api.key", "fish_audio.api_key", "whisper.elevenlabs_api_key"}
 SETTINGS = [
-    "target_language", "dubbing_language_code", "whisper.language",
+    "translation_engine", "target_language", "dubbing_language_code", "whisper.language",
     "tts_method", "edge_tts.voice", "kokoro_tts.voice", "kokoro_tts.speed",
     "chatterbox_tts.clone", "chatterbox_tts.exaggeration", "fish_audio.mode", "fish_audio.api_key",
     "api.key", "api.base_url", "api.model", "api.llm_support_json", "max_workers",
@@ -158,7 +170,8 @@ def system():
             "fish_audio": True,
             "demucs": find_spec("demucs") is not None,
         },
-        "llm_ready": _is_set(load_key_or("api.key", "")) or "localhost" in str(load_key_or("api.base_url", "")),
+        "llm_ready": load_key_or("translation_engine", "llm") == "google"
+                     or _is_set(load_key_or("api.key", "")) or "localhost" in str(load_key_or("api.base_url", "")),
     }
 
 
@@ -343,6 +356,220 @@ def preview(data: dict = Body(...)):
     return FileResponse(out, media_type="audio/mpeg" if out.suffix == ".mp3" else "audio/wav")
 
 
+# ------------------------------------------------------------------ assistant de configuration
+# Tout ce qui demandait des commandes se fait ici, par des boutons : modèle Ollama, voix locales,
+# accès depuis le téléphone.
+
+OLLAMA = "http://localhost:11434"
+OLLAMA_MODEL = "qwen2.5:7b"
+TOOLS = ROOT / "tools"
+jobs = {
+    "ollama": {"running": False, "percent": 0, "status": "", "error": None},
+    "voices": {"running": False, "done": False, "ok": None, "log": []},
+    "tunnel": {"running": False, "url": None, "error": None, "status": ""},
+}
+
+
+def ollama_info():
+    try:
+        tags = requests.get(f"{OLLAMA}/api/tags", timeout=1.5).json()
+        models = [m.get("name", "") for m in tags.get("models", [])]
+        return {"running": True, "models": models, "ready": any(m.split(":")[0] == OLLAMA_MODEL.split(":")[0] for m in models)}
+    except Exception:
+        return {"running": False, "models": [], "ready": False}
+
+
+def use_ollama(model):
+    for key, value in {"translation_engine": "llm", "api.base_url": f"{OLLAMA}/v1", "api.model": model,
+                       "api.key": "ollama", "max_workers": 1, "api.llm_support_json": False}.items():
+        update_key(key, value, add_missing=True)
+
+
+@app.get("/api/setup")
+def setup_state(request: Request):
+    local = is_local(request)
+    return {
+        "done": bool(load_key_or("doublage_setup_done", False)),
+        "local": local,
+        "password": password() if local else None,
+        "lan": [f"http://{a}:{PORT}" for a in local_addresses()],
+        "ollama": ollama_info(),
+        "ollama_model": OLLAMA_MODEL,
+        "jobs": jobs,
+        "remote_access": bool(load_key_or("remote_access", False)),
+        "platform": sys.platform,
+    }
+
+
+@app.post("/api/setup/finish")
+def setup_finish():
+    update_key("doublage_setup_done", True, add_missing=True)
+    return {"ok": True}
+
+
+@app.post("/api/setup/translation")
+def setup_translation(data: dict = Body(...)):
+    choice = data.get("engine")
+    if choice == "google":
+        update_key("translation_engine", "google", add_missing=True)
+    elif choice == "ollama":
+        info = ollama_info()
+        installed = next((m for m in info["models"] if m.split(":")[0] == OLLAMA_MODEL.split(":")[0]), None)
+        use_ollama(installed or OLLAMA_MODEL)
+    elif choice == "api":
+        update_key("translation_engine", "llm", add_missing=True)
+    return get_settings()
+
+
+@app.post("/api/ollama/pull")
+def ollama_pull():
+    job = jobs["ollama"]
+    if job["running"]:
+        return job
+    if not ollama_info()["running"]:
+        raise HTTPException(409, "Ollama n'est pas lancé : installe-le puis ouvre-le.")
+
+    def run():
+        job.update(running=True, percent=0, status="Démarrage…", error=None)
+        try:
+            with requests.post(f"{OLLAMA}/api/pull", json={"model": OLLAMA_MODEL, "stream": True}, stream=True, timeout=3600) as r:
+                for line in r.iter_lines():
+                    if not line:
+                        continue
+                    event = __import__("json").loads(line)
+                    if event.get("error"):
+                        raise RuntimeError(event["error"])
+                    if event.get("total"):
+                        job["percent"] = round(100 * event.get("completed", 0) / event["total"])
+                    job["status"] = event.get("status", "")
+            use_ollama(OLLAMA_MODEL)
+            job.update(percent=100, status="Prêt")
+        except Exception as exc:
+            job["error"] = str(exc)
+        finally:
+            job["running"] = False
+
+    threading.Thread(target=run, daemon=True).start()
+    job["running"] = True
+    return job
+
+
+@app.post("/api/install/voices")
+def install_voices():
+    job = jobs["voices"]
+    if job["running"]:
+        return job
+    if engine.runner.is_active:
+        raise HTTPException(409, "Attends la fin du doublage en cours.")
+
+    def run():
+        job.update(running=True, done=False, ok=None, log=["Installation de Kokoro et Chatterbox (quelques minutes)…"])
+        try:
+            proc = subprocess.Popen([sys.executable, "-u", "installer_voix.py"], cwd=ROOT, stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+            for line in proc.stdout:
+                line = line.strip()
+                if line:
+                    job["log"] = (job["log"] + [line])[-40:]
+            proc.wait()
+            job["ok"] = find_spec("kokoro") is not None or proc.returncode == 0
+        except Exception as exc:
+            job["log"].append(f"Erreur : {exc}")
+            job["ok"] = False
+        finally:
+            import importlib
+            importlib.invalidate_caches()
+            job.update(running=False, done=True)
+
+    threading.Thread(target=run, daemon=True).start()
+    job["running"] = True
+    return job
+
+
+def cloudflared_path():
+    found = shutil.which("cloudflared")
+    if found:
+        return found
+    name = "cloudflared.exe" if os.name == "nt" else "cloudflared"
+    return str(TOOLS / name) if (TOOLS / name).exists() else None
+
+
+def download_cloudflared(job):
+    """Télécharge cloudflared (un seul fichier) dans tools/, depuis les versions officielles de Cloudflare."""
+    import platform
+    import tarfile
+    machine = platform.machine().lower()
+    arch = "arm64" if machine in {"arm64", "aarch64"} else "amd64"
+    base = "https://github.com/cloudflare/cloudflared/releases/latest/download/"
+    TOOLS.mkdir(exist_ok=True)
+    job["status"] = "Téléchargement de cloudflared…"
+    if os.name == "nt":
+        target, url = TOOLS / "cloudflared.exe", base + "cloudflared-windows-amd64.exe"
+    elif sys.platform == "darwin":
+        target, url = TOOLS / "cloudflared", base + f"cloudflared-darwin-{arch}.tgz"
+    else:
+        target, url = TOOLS / "cloudflared", base + f"cloudflared-linux-{arch}"
+    tmp = target.with_suffix(".download")
+    with requests.get(url, stream=True, timeout=120) as r:
+        r.raise_for_status()
+        with open(tmp, "wb") as f:
+            for chunk in r.iter_content(1 << 20):
+                f.write(chunk)
+    if url.endswith(".tgz"):
+        with tarfile.open(tmp) as archive:
+            member = next(m for m in archive.getmembers() if m.name.endswith("cloudflared"))
+            with archive.extractfile(member) as src, open(target, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+        tmp.unlink()
+    else:
+        tmp.replace(target)
+    target.chmod(0o755)
+    return str(target)
+
+
+tunnel_process = None
+
+
+def start_tunnel():
+    global tunnel_process
+    job = jobs["tunnel"]
+    if job["running"]:
+        return
+    job.update(running=True, url=None, error=None, status="Préparation…")
+
+    def run():
+        global tunnel_process
+        try:
+            exe = cloudflared_path() or download_cloudflared(job)
+            job["status"] = "Ouverture du tunnel…"
+            tunnel_process = subprocess.Popen([exe, "tunnel", "--no-autoupdate", "--url", f"http://localhost:{PORT}"],
+                                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                              encoding="utf-8", errors="replace")
+            for line in tunnel_process.stdout:
+                found = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", line)
+                if found and not job["url"]:
+                    job.update(url=found.group(), status="Actif")
+                    print(f"  Accès depuis partout : {job['url']}")
+            job["error"] = job["error"] or "Le tunnel s'est arrêté."
+        except Exception as exc:
+            job["error"] = f"Impossible d'ouvrir l'accès à distance : {exc}"
+        finally:
+            job.update(running=False, url=None, status="")
+
+    threading.Thread(target=run, daemon=True).start()
+
+
+@app.post("/api/tunnel")
+def tunnel_toggle(data: dict = Body(...)):
+    enable = bool(data.get("enable"))
+    update_key("remote_access", enable, add_missing=True)
+    if enable:
+        start_tunnel()
+    elif tunnel_process and tunnel_process.poll() is None:
+        tunnel_process.terminate()
+    return jobs["tunnel"]
+
+
 # ------------------------------------------------------------------ interface
 
 app.mount("/", StaticFiles(directory=WEB, html=True), name="web")
@@ -364,10 +591,14 @@ if __name__ == "__main__":
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
-    print("\n  Doublage est prêt")
+    print("\n  Doublage est prêt — la page s'ouvre dans ton navigateur.")
     print(f"  Sur ce PC          : http://localhost:{PORT}")
     for address in local_addresses():
         print(f"  Téléphone (Wi-Fi)  : http://{address}:{PORT}")
-    print(f"  Mot de passe       : {password()}")
-    print("  (pour l'utiliser hors de chez toi, voir « Accès depuis partout » dans le README)\n")
+    print(f"  Mot de passe       : {password()}  (demandé seulement depuis un autre appareil)")
+    print("  Laisse cette fenêtre ouverte tant que tu utilises Doublage.\n")
+    if load_key_or("remote_access", False):
+        start_tunnel()
+    if not os.environ.get("DOUBLAGE_NO_BROWSER"):
+        threading.Timer(1.5, lambda: webbrowser.open(f"http://localhost:{PORT}")).start()
     uvicorn.run(app, host=HOST, port=PORT, log_level="warning")
