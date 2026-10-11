@@ -66,7 +66,7 @@ const STEP_FR = {
   "Finalize dubbing outputs": "Finalisation",
 };
 const DUB_STEPS = Object.keys(STEP_FR);
-const STUDIO_STEPS = 3;
+const STUDIO_STEPS = 4;
 const SUB_STEPS = DUB_STEPS.slice(0, 7);
 
 const LLM_PRESETS = [

@@ -114,17 +114,22 @@
   <section class="view" id="v-studio">
     <div id="st-home">
       <h1>Studio</h1>
-      <p class="lede">Remplace une voix par la tienne. La voix d'origine est retirée, l'ambiance reste, et le texte défile sur une bande rythmo comme en studio.</p>
+      <p class="lede">Mets n'importe quelle vidéo : les voix d'origine sont retirées, l'ambiance reste, et chaque personne qui parle a sa bande rythmo de couleur. À vous de doubler.</p>
 
       <div class="glass card" id="st-new">
-        <h2>Nouvelle scène</h2>
+        <h2>Nouvelle vidéo</h2>
         <label class="drop" id="st-drop">
           <input type="file" id="st-file" accept="video/*,.mkv" hidden>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg>
-          <strong id="st-drop-title">Choisir un extrait vidéo</strong>
-          <small id="st-drop-sub">Idéalement la scène seule, quelques minutes au plus</small>
+          <strong id="st-drop-title">Choisir une vidéo</strong>
+          <small id="st-drop-sub">Un extrait, un épisode ou un film entier</small>
         </label>
-        <label class="field" style="margin-top:12px"><span>Langue parlée dans la scène</span><select id="st-lang"></select></label>
+        <div class="row" style="margin-top:12px">
+          <label class="field"><span>Langue parlée</span><select id="st-lang"></select></label>
+          <label class="field"><span>Personnes qui parlent</span><select id="st-count">
+            <option value="-1">Détection auto</option><option>1</option><option>2</option><option>3</option><option>4</option>
+            <option>5</option><option>6</option><option>7</option><option>8</option></select></label>
+        </div>
         <button class="btn primary" id="st-go">Préparer le studio</button>
       </div>
 
@@ -135,7 +140,8 @@
         </div>
         <div class="progress"><div id="st-bar"></div></div>
         <div class="notice bad hidden" id="st-run-error"></div>
-        <p class="hint">Séparation de la voix et de l'ambiance, puis repérage de chaque mot. Quelques minutes.</p>
+        <ul class="steps" id="st-steps"></ul>
+        <p class="hint" style="margin-top:12px">Tu peux fermer la page, ça continue sur l'ordi. Compte quelques minutes pour un extrait, plus pour un film.</p>
         <button class="btn small ghost hidden" id="st-run-close">Fermer</button>
       </div>
 
@@ -143,54 +149,77 @@
     </div>
 
     <div id="st-editor" class="hidden">
-      <button class="btn small ghost" id="st-back" style="margin-bottom:12px">← Scènes</button>
+      <button class="btn small ghost" id="st-back" style="margin-bottom:12px">← Vidéos</button>
       <h1 id="st-title" style="font-size:24px"></h1>
       <div class="notice warn hidden" id="st-mic-warn"></div>
+      <div class="notice warn hidden" id="st-sp-warn"></div>
 
       <div class="glass card stage">
         <div class="screen"><video id="st-video" playsinline preload="auto"></video>
-          <div class="countdown hidden" id="st-count"></div>
+          <div class="countdown hidden" id="st-cd"></div>
           <div class="rec-dot hidden" id="st-rec"><i></i>REC</div>
         </div>
         <canvas id="st-band" class="band"></canvas>
-        <div class="seek"><span id="st-time">0:00</span><input type="range" id="st-seek" min="0" max="1000" value="0"><span id="st-dur">0:00</span></div>
+        <div class="seek"><span id="st-time">0:00</span><input type="range" id="st-seek" min="0" max="10000" value="0"><span id="st-dur">0:00</span></div>
+
+        <div class="who"><span>Je double</span><div id="st-who"></div></div>
+
         <div class="transport">
-          <button class="btn small" id="st-orig" title="Écouter la scène d'origine pour apprendre le rythme">▶ Original</button>
-          <button class="btn small" id="st-play">▶ Sans la voix</button>
+          <button class="btn small icon" id="st-prev" title="Réplique précédente">⏮</button>
+          <button class="btn small" id="st-orig" title="La scène d'origine, pour apprendre le rythme">▶ Original</button>
+          <button class="btn small" id="st-play" title="Sans les voix d'origine, avec vos prises">▶ Écouter</button>
+          <button class="btn small icon" id="st-next" title="Réplique suivante">⏭</button>
           <button class="btn rec" id="st-record"><i></i>Enregistrer</button>
-          <button class="btn small danger hidden" id="st-stop">■ Stop</button>
+          <button class="btn danger hidden" id="st-stop">■ Stop</button>
         </div>
-        <p class="hint" style="text-align:center;margin:10px 0 0">Mets des écouteurs : tu entends l'ambiance, le micro n'entend que toi.</p>
+        <label class="toggle" style="margin-top:6px"><span>Voix d'origine en fond<small>Un guide discret dans tes écouteurs pendant que tu enregistres</small></span>
+          <span class="switch"><input type="checkbox" id="st-guide"><i></i></span></label>
+        <p class="hint" style="text-align:center;margin:4px 0 0">L'enregistrement part de l'endroit où tu es. Mets des écouteurs.</p>
       </div>
 
-      <div class="glass card hidden" id="st-take">
-        <h2>Ta prise</h2>
-        <div class="btns" style="margin-bottom:12px">
-          <button class="btn small" id="st-listen">▶ Écouter avec l'image</button>
-          <button class="btn small ghost" id="st-redo">↺ Refaire</button>
+      <div class="glass card">
+        <h2>Personnes</h2>
+        <div id="st-people"></div>
+        <div class="recount">
+          <select id="st-recount"><option value="-1">Recompter auto</option><option value="1">1 personne</option><option value="2">2 personnes</option>
+            <option value="3">3 personnes</option><option value="4">4 personnes</option><option value="5">5 personnes</option><option value="6">6 personnes</option>
+            <option value="7">7 personnes</option><option value="8">8 personnes</option></select>
+          <button class="btn small" id="st-recount-go">Recompter</button>
         </div>
-        <label class="field"><span>Calage de ta voix <b id="st-offset-val">0 ms</b></span>
-          <input type="range" id="st-offset" min="-500" max="500" step="10" value="0"></label>
-        <p class="hint">Si ta voix arrive en retard sur les lèvres, glisse vers la gauche.</p>
+        <div class="status hidden" id="st-recount-status"></div>
+      </div>
+
+      <div class="glass card">
+        <h2>Prises</h2>
+        <div id="st-clips"></div>
+      </div>
+
+      <div class="glass card">
+        <h2>Mixage</h2>
+        <label class="field"><span>Calage des voix <b id="st-lat-val">0 ms</b></span>
+          <input type="range" id="st-lat" min="-500" max="500" step="10" value="0"></label>
+        <p class="hint">Si vos voix arrivent en retard sur les lèvres, glisse vers la gauche. Écoute pour vérifier.</p>
         <div class="row">
-          <label class="field"><span>Volume de ta voix</span><input type="range" id="st-vgain" min="0.3" max="2.5" step="0.05" value="1.2"></label>
-          <label class="field"><span>Volume de l'ambiance</span><input type="range" id="st-again" min="0" max="1.5" step="0.05" value="1"></label>
+          <label class="field"><span>Vos voix</span><input type="range" id="st-vgain" min="0.3" max="2.5" step="0.05" value="1.2"></label>
+          <label class="field"><span>Ambiance</span><input type="range" id="st-again" min="0" max="1.5" step="0.05" value="1"></label>
         </div>
-        <button class="btn primary" id="st-render">Créer la vidéo</button>
+        <label class="toggle"><span>Garder les voix d'origine des personnes non doublées<small>Utile si vous ne doublez qu'une partie des rôles</small></span>
+          <span class="switch"><input type="checkbox" id="st-keep" checked><i></i></span></label>
+        <button class="btn primary" id="st-render" style="margin-top:8px">Créer la vidéo</button>
       </div>
 
       <div class="glass card hidden" id="st-finals">
-        <h2>Tes vidéos</h2>
+        <h2>Vidéos terminées</h2>
         <video id="st-final-player" controls playsinline></video>
         <div class="btns" id="st-final-list"></div>
       </div>
 
       <div class="glass card">
-        <h2>Texte de la bande</h2>
-        <p class="hint" style="margin-top:0">Un mot mal reconnu ? Corrige-le ici, le minutage ne bouge pas.</p>
-        <div class="words" id="st-words"></div>
-        <div class="btns" style="margin-top:12px"><button class="btn small" id="st-words-save">Enregistrer le texte</button>
-          <button class="btn small ghost danger" id="st-delete">Supprimer la scène</button></div>
+        <h2>Texte des répliques</h2>
+        <p class="hint" style="margin-top:0">Corrige un mot mal reconnu ou donne une réplique à la bonne personne. Le minutage ne bouge pas.</p>
+        <div class="lines" id="st-lines"></div>
+        <div class="btns" style="margin-top:12px"><button class="btn small" id="st-lines-save">Enregistrer le texte</button>
+          <button class="btn small ghost danger" id="st-delete">Supprimer la vidéo</button></div>
       </div>
     </div>
   </section>

@@ -9,23 +9,25 @@ depuis n'importe quel navigateur, et s'installe comme une appli sur le télépho
 ## Deux façons de doubler
 
 - **Doubler** : la vidéo est traduite et une voix (synthétique ou clonée) parle dans la nouvelle langue. Automatique.
-- **Studio** : tu remplaces toi-même une voix par la tienne, comme en studio de doublage.
-  La voix d'origine est retirée (la musique et les bruits restent), le texte défile sur une **bande rythmo**
-  et se colore quand il passe sous le trait rouge, au moment exact où il faut dire chaque mot.
-  Tu t'enregistres (micro du PC ou du téléphone), tu réécoutes avec l'image, tu ajustes le calage
-  et les volumes, puis Doublage monte la vidéo finale avec ta voix.
+- **Studio** : un vrai studio de doublage maison. Tu mets n'importe quelle vidéo (extrait, épisode, film) :
+  les voix d'origine sont retirées et l'ambiance reste (musique, bruits). Doublage détecte **combien de personnes
+  parlent** et qui dit quoi, puis affiche **une bande rythmo de couleur par personne**. Le texte défile et se colore
+  sous le trait rouge au moment exact où il faut le dire. Chacun enregistre ses répliques, et Doublage monte la vidéo finale.
 
 ### Le Studio pas à pas
 
-1. Onglet **Studio** → choisis l'extrait (la scène seule, quelques minutes au plus) et sa langue.
-2. Quelques minutes de préparation : séparation voix / ambiance, puis repérage de chaque mot.
-3. **▶ Original** pour apprendre le rythme, puis **● Enregistrer** : 3, 2, 1, la scène démarre sans la voix.
-4. **Écouter avec l'image**, ajuste le curseur de calage si ta voix arrive trop tôt ou trop tard, puis **Créer la vidéo**.
+1. Onglet **Studio** → choisis la vidéo, sa langue, et le nombre de personnes (ou « Détection auto »).
+2. Préparation automatique : séparation voix / ambiance, repérage de chaque mot, détection de qui parle.
+3. **Je double** : choisis la personne (Lucas, Personne 2…). ⏮ ⏭ sautent à ses répliques.
+4. **▶ Original** pour apprendre le rythme, puis **● Enregistrer** : 3, 2, 1, la vidéo repart de là où tu es,
+   sans les voix. Tu entends les prises déjà faites par les autres, et en option la voix d'origine en guide.
+5. Refais une réplique autant de fois que tu veux : la nouvelle prise remplace l'ancienne sur ce passage.
+6. **Mixage** : calage, volumes, et option pour garder la voix d'origine des personnes que personne n'a doublées.
+   **Créer la vidéo** et c'est prêt.
 
-Conseils : mets des écouteurs (sinon le micro capte aussi l'ambiance). Toutes les voix de la scène
-sont retirées, pas seulement celle d'un personnage : choisis une scène où il parle seul, ou double tout le monde.
-Un mot mal reconnu se corrige dans « Texte de la bande ». Sur téléphone, le micro du navigateur ne
-fonctionne qu'avec l'adresse https « Accès depuis partout ».
+Conseils : mettez des écouteurs (sinon le micro capte l'ambiance). Si la détection se trompe, renomme les personnes,
+change la personne d'une réplique dans « Texte des répliques », ou **Recompter** avec le bon nombre.
+Sur téléphone, le micro du navigateur ne fonctionne qu'avec l'adresse https « Accès depuis partout ».
 
 ## Ce qui est combiné
 
@@ -33,6 +35,7 @@ fonctionne qu'avec l'adresse https « Accès depuis partout ».
 |---|---|---|
 | Pipeline complet, traduction en 3 passes, sous-titres d'une ligne | [VideoLingo](https://github.com/Huanshere/VideoLingo) (Apache 2.0) | Le cœur de l'appli |
 | Transcription au mot près | Qwen3-ASR / WhisperX (via VideoLingo) | Des sous-titres bien calés |
+| Qui parle quand (Studio) | sherpa-onnx (Apache 2.0) + pyannote segmentation 3.0 (MIT) + 3D-Speaker (Apache 2.0) | Une bande par personne, sans compte ni clé |
 | Séparation voix / musique | Demucs (Meta, MIT) | La musique et les bruits d'origine sont gardés sous le doublage, et le Studio part de l'ambiance seule |
 | Téléchargement YouTube et autres sites | yt-dlp (Unlicense) | Coller un lien suffit |
 | Voix rapides et gratuites | Edge TTS | Voix naturelles en 15 langues |

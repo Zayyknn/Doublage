@@ -15,5 +15,6 @@ Composants utilisés au moment de l'exécution, installés séparément :
 - Demucs (Meta), MIT
 - yt-dlp, Unlicense
 - edge-tts, LGPL-3.0
+- sherpa-onnx (k2-fsa), Apache 2.0 ; modèles pyannote segmentation 3.0 (MIT) et 3D-Speaker ERes2Net (Apache 2.0), téléchargés au premier usage
 
 - qrcode.js (davidshimjs), MIT, inclus dans web/qrcode.min.js
