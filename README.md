@@ -34,7 +34,22 @@ L'interface d'origine de VideoLingo reste disponible pour les réglages avancés
    - sur le PC : http://localhost:8765
    - sur le téléphone, sur le même Wi-Fi : http://192.168.x.x:8765
 
-Mac / Linux : `./lancer-doublage.sh`.
+## Installation (Mac)
+
+Un Mac Apple Silicon (M1, M2, M3, M4…) est idéal : la transcription utilise la puce Apple (MLX).
+Un Mac Intel fonctionne, mais lentement.
+
+1. Télécharge le ZIP depuis GitHub et dézippe-le (dans Documents, par exemple).
+2. Double-clique **`Lancer-Doublage.command`**. La première fois, macOS le bloque : fais **clic droit → Ouvrir → Ouvrir**.
+   Si macOS refuse toujours : Réglages Système → Confidentialité et sécurité → **Ouvrir quand même**.
+3. Le premier lancement installe tout (10 à 20 minutes). Ensuite, ouvre http://localhost:8765
+   et entre le mot de passe affiché dans le Terminal.
+4. Traduction : installe [Ollama pour Mac](https://ollama.com), puis dans le Terminal : `ollama pull qwen3:8b`.
+
+Voix locales : `Installer-Voix-Locales.command`. Accès depuis partout : `brew install cloudflared`,
+puis relance Doublage ; l'adresse https://….trycloudflare.com est écrite dans le fichier `.tunnel.log`.
+
+Linux : `./lancer-doublage.sh`.
 
 ### La traduction : choisis une IA (Réglages → Traduction)
 
