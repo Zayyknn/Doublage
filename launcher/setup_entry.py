@@ -1,4 +1,4 @@
-"""Point d'entrée de Doublage-Setup.exe."""
+"""Point d'entrée de JoueTaReplique-Setup.exe."""
 import setup_app
 
 if __name__ == "__main__":

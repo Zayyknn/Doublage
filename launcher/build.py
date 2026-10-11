@@ -1,8 +1,8 @@
-"""Construit l'application Doublage (Windows .exe ou Mac .app) avec PyInstaller.
+"""Construit l'application Joue ta réplique (Windows .exe ou Mac .app) avec PyInstaller.
 
     python launcher/build.py
 
-Prépare build/bundle/ : le code de Doublage (app/), l'outil uv, l'icône ; puis lance PyInstaller.
+Prépare build/bundle/ : le code de l'appli (app/), l'outil uv, l'icône ; puis lance PyInstaller.
 """
 import io
 import os
@@ -71,31 +71,35 @@ def main():
 
     sep = ";" if sys.platform == "win32" else ":"
     icon = ROOT / "launcher" / ("icon.ico" if sys.platform == "win32" else "icon.icns")
-    args = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--windowed", "--name", "Doublage",
+    args = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--windowed", "--name", "JoueTaReplique",
             "--icon", str(icon), "--distpath", str(ROOT / "dist"), "--workpath", str(BUILD / "work"),
             "--specpath", str(BUILD), "--add-data", f"{app}{sep}app", "--add-data", f"{BUNDLE / 'icon.png'}{sep}.",
             "--add-data", f"{BUNDLE / 'splash.html'}{sep}.", "--add-data", f"{BUNDLE / 'setup.html'}{sep}.",
             "--paths", str(ROOT / "launcher"), "--hidden-import", "setup_app",
             "--add-binary", f"{BUNDLE / ('uv.exe' if sys.platform == 'win32' else 'uv')}{sep}."]
     if sys.platform == "darwin":
-        args += ["--osx-bundle-identifier", "app.doublage.launcher"]
+        args += ["--osx-bundle-identifier", "app.jouetareplique"]
     args.append(str(ROOT / "launcher" / "doublage_launcher.py"))
     subprocess.run(args, check=True)
     if sys.platform == "darwin":  # le micro du Studio : macOS exige une phrase d'explication
         import plistlib
-        plist = ROOT / "dist" / "Doublage.app" / "Contents" / "Info.plist"
+        built = ROOT / "dist" / "JoueTaReplique.app"
+        app_path = ROOT / "dist" / "Joue ta réplique.app"  # le nom que montre le Finder
+        shutil.rmtree(app_path, ignore_errors=True)
+        built.rename(app_path)
+        plist = app_path / "Contents" / "Info.plist"
         info = plistlib.loads(plist.read_bytes())
-        info.update({"NSMicrophoneUsageDescription": "Doublage enregistre ta voix dans le Studio.",
-                     "CFBundleDisplayName": "Doublage", "CFBundleShortVersionString": version.lstrip("v"),
+        info.update({"NSMicrophoneUsageDescription": "Joue ta réplique enregistre ta voix dans le Studio.",
+                     "CFBundleDisplayName": "Joue ta réplique", "CFBundleName": "Joue ta réplique", "CFBundleShortVersionString": version.lstrip("v"),
                      "NSHighResolutionCapable": True, "LSMinimumSystemVersion": "11.0"})
         plist.write_bytes(plistlib.dumps(info))
         subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(plist.parent.parent)], check=True)
-    if sys.platform == "win32":  # Doublage-Setup.exe : un seul fichier qui contient l'application et l'installateur
+    if sys.platform == "win32":  # JoueTaReplique-Setup.exe : un seul fichier qui contient l'application et l'installateur
         subprocess.run([sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onefile", "--windowed",
-                        "--name", "Doublage-Setup", "--icon", str(icon), "--distpath", str(ROOT / "dist"),
+                        "--name", "JoueTaReplique-Setup", "--icon", str(icon), "--distpath", str(ROOT / "dist"),
                         "--workpath", str(BUILD / "work-setup"), "--specpath", str(BUILD),
                         "--paths", str(ROOT / "launcher"),
-                        "--add-data", f"{ROOT / 'dist' / 'Doublage'}{sep}payload/Doublage",
+                        "--add-data", f"{ROOT / 'dist' / 'JoueTaReplique'}{sep}payload/JoueTaReplique",
                         "--add-data", f"{BUNDLE / 'setup.html'}{sep}.", "--add-data", f"{BUNDLE / 'icon.png'}{sep}.",
                         str(ROOT / "launcher" / "setup_entry.py")], check=True)
     print("Construit dans", ROOT / "dist")

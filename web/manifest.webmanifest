@@ -1,6 +1,6 @@
 {
-  "name": "Doublage",
-  "short_name": "Doublage",
+  "name": "Joue ta réplique",
+  "short_name": "Joue ta réplique",
   "description": "Double tes vidéos dans une autre langue",
   "start_url": "/",
   "display": "standalone",

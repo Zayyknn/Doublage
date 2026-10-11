@@ -1,10 +1,10 @@
-"""Installateur et désinstallateur Windows de Doublage, aux couleurs de l'application.
+"""Installateur et désinstallateur Windows de Joue ta réplique, aux couleurs de l'application.
 
-Doublage-Setup.exe contient l'application (dossier `payload/Doublage`). L'installation :
-1. copie l'application dans le dossier choisi (par défaut %LOCALAPPDATA%\\Programs\\Doublage) ;
+JoueTaReplique-Setup.exe contient l'application (dossier `payload/JoueTaReplique`). L'installation :
+1. copie l'application dans le dossier choisi (par défaut %LOCALAPPDATA%\\Programs\\JoueTaReplique) ;
 2. crée les raccourcis et l'entrée « Applications installées » de Windows (sans droits administrateur) ;
-3. installe le moteur (Python, IA) avec la progression, pour que Doublage s'ouvre tout de suite ensuite.
-`Doublage.exe --uninstall` affiche la désinstallation.
+3. installe le moteur (Python, IA) avec la progression, pour que l'appli s'ouvre tout de suite ensuite.
+`JoueTaReplique.exe --uninstall` affiche la désinstallation.
 """
 from __future__ import annotations
 
@@ -20,15 +20,15 @@ from pathlib import Path
 
 import doublage_launcher as L
 
-UNINSTALL_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\Doublage"
+UNINSTALL_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\JoueTaReplique"
 
 
 def default_dir() -> Path:
-    return Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "Programs" / "Doublage"
+    return Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "Programs" / "JoueTaReplique"
 
 
 def payload() -> Path:
-    return L.bundle() / "payload" / "Doublage"
+    return L.bundle() / "payload" / "JoueTaReplique"
 
 
 def version() -> str:
@@ -46,7 +46,7 @@ def shell_folder(name: str) -> Path:
     return Path(out)
 
 
-def shortcut(path: Path, target: Path, args: str = "", description: str = "Doublage"):
+def shortcut(path: Path, target: Path, args: str = "", description: str = "Joue ta réplique"):
     path.parent.mkdir(parents=True, exist_ok=True)
     ps = ("$s = (New-Object -ComObject WScript.Shell).CreateShortcut({p}); $s.TargetPath = {t}; $s.Arguments = {a}; "
           "$s.WorkingDirectory = {w}; $s.IconLocation = {i}; $s.Description = {d}; $s.Save()").format(
@@ -57,9 +57,9 @@ def shortcut(path: Path, target: Path, args: str = "", description: str = "Doubl
 
 def register(install_dir: Path, size_mb: int):
     import winreg
-    exe = install_dir / "Doublage.exe"
+    exe = install_dir / "JoueTaReplique.exe"
     with winreg.CreateKey(winreg.HKEY_CURRENT_USER, UNINSTALL_KEY) as key:
-        for name, value in {"DisplayName": "Doublage", "DisplayVersion": version(), "Publisher": "Doublage",
+        for name, value in {"DisplayName": "Joue ta réplique", "DisplayVersion": version(), "Publisher": "Joue ta réplique",
                             "DisplayIcon": f"{exe},0", "InstallLocation": str(install_dir),
                             "UninstallString": f'"{exe}" --uninstall', "QuietUninstallString": f'"{exe}" --uninstall'}.items():
             winreg.SetValueEx(key, name, 0, winreg.REG_SZ, value)
@@ -77,8 +77,8 @@ def installed_dir() -> Path | None:
 
 
 def stop_running():
-    """Ferme Doublage s'il tourne (mise à jour ou désinstallation)."""
-    subprocess.run(["taskkill", "/F", "/T", "/IM", "Doublage.exe", "/FI", f"PID ne {os.getpid()}"],
+    """Ferme l'appli si elle tourne (mise à jour ou désinstallation)."""
+    subprocess.run(["taskkill", "/F", "/T", "/IM", "JoueTaReplique.exe", "/FI", f"PID ne {os.getpid()}"],
                    capture_output=True, creationflags=L.NO_WINDOW)
 
 
@@ -102,14 +102,14 @@ def run(uninstall: bool = False):
             chosen = state["window"].create_file_dialog(webview.FOLDER_DIALOG, directory=str(state["dir"].parent))
             if chosen:
                 folder = Path(chosen[0] if isinstance(chosen, (list, tuple)) else chosen)
-                state["dir"] = folder if folder.name.lower() == "doublage" else folder / "Doublage"
+                state["dir"] = folder if folder.name.lower() == "jouetareplique" else folder / "JoueTaReplique"
                 js("setDir", str(state["dir"]))
 
         def install(self, options):
             threading.Thread(target=do_install, args=(options,), daemon=True).start()
 
         def launch(self):
-            subprocess.Popen([str(state["dir"] / "Doublage.exe")], cwd=state["dir"], creationflags=0x00000008)  # DETACHED
+            subprocess.Popen([str(state["dir"] / "JoueTaReplique.exe")], cwd=state["dir"], creationflags=0x00000008)  # DETACHED
             state["window"].destroy()
 
         def log(self):
@@ -132,12 +132,12 @@ def run(uninstall: bool = False):
                 for item in target.iterdir():  # remplace l'ancienne version de l'application, pas les données
                     shutil.rmtree(item) if item.is_dir() else item.unlink()
             shutil.copytree(payload(), target, dirs_exist_ok=True)
-            exe = target / "Doublage.exe"
+            exe = target / "JoueTaReplique.exe"
             js("setStep", "Création des raccourcis")
             if options.get("desktop"):
-                shortcut(shell_folder("Desktop") / "Doublage.lnk", exe)
+                shortcut(shell_folder("Desktop") / "Joue ta réplique.lnk", exe)
             if options.get("startmenu"):
-                shortcut(shell_folder("Programs") / "Doublage.lnk", exe)
+                shortcut(shell_folder("Programs") / "Joue ta réplique.lnk", exe)
             size = sum(f.stat().st_size for f in target.rglob("*") if f.is_file()) // (1 << 20)
             register(target, size + 6000)  # + le moteur installé au premier lancement
 
@@ -165,7 +165,7 @@ def run(uninstall: bool = False):
         try:
             stop_running()
             target = installed_dir() or Path(sys.executable).parent
-            for link in (shell_folder("Desktop") / "Doublage.lnk", shell_folder("Programs") / "Doublage.lnk"):
+            for link in (shell_folder("Desktop") / "Joue ta réplique.lnk", shell_folder("Programs") / "Joue ta réplique.lnk"):
                 link.unlink(missing_ok=True)
             data = L.home()
             if purge:
@@ -187,7 +187,7 @@ def run(uninstall: bool = False):
         except Exception as exc:
             js("setUninstallError", f"La désinstallation a échoué : {exc}")
 
-    window = webview.create_window("Désinstaller Doublage" if uninstall else "Installer Doublage", html=html,
+    window = webview.create_window("Désinstaller Joue ta réplique" if uninstall else "Installer Joue ta réplique", html=html,
                                    js_api=Api(), width=640, height=580, resizable=False, background_color="#07080d")
     state["window"] = window
     window.events.closing += lambda: state["engine"] and state["engine"].stop()

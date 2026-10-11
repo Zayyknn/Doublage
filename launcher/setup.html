@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<title>Installer Doublage</title>
+<title>Installer Joue ta réplique</title>
 <style>
   :root { --text:#f3f4f8; --muted:rgba(243,244,248,.62); --faint:rgba(243,244,248,.36); --line:rgba(255,255,255,.12);
     --accent:#8b7bff; --accent2:#4fd6ff; --ok:#4ade9a; --bad:#ff6b81; }
@@ -82,7 +82,7 @@
 <div class="wrap">
   <div class="brand">
     <svg viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b4a9ff"/><stop offset=".5" stop-color="#8b7bff"/><stop offset="1" stop-color="#4fd6ff"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="#0d0e16"/><rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="url(#g)" stroke-opacity=".5" stroke-width="2"/><g fill="url(#g)"><rect x="13" y="26" width="5" height="12" rx="2.5"/><rect x="21" y="19" width="5" height="26" rx="2.5"/><rect x="29" y="23" width="5" height="18" rx="2.5"/></g><path d="M39 22l13 10-13 10z" fill="url(#g)"/></svg>
-    <span id="brand-text">Installation de Doublage</span>
+    <span id="brand-text">Installation de Joue ta réplique</span>
     <div class="dots" id="dots"><i class="on"></i><i></i><i></i><i></i></div>
   </div>
 
@@ -90,7 +90,7 @@
   <section class="page on" id="p-welcome">
     <div class="hero">
       <svg viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#0d0e16"/><rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="url(#g)" stroke-opacity=".5" stroke-width="2"/><g fill="url(#g)"><rect x="13" y="26" width="5" height="12" rx="2.5"/><rect x="21" y="19" width="5" height="26" rx="2.5"/><rect x="29" y="23" width="5" height="18" rx="2.5"/></g><path d="M39 22l13 10-13 10z" fill="url(#g)"/></svg>
-      <div><h1>Bienvenue</h1><p class="lede" style="margin:0">Doublage traduit, double et revoice tes vidéos, depuis ton ordinateur ou ton téléphone.</p></div>
+      <div><h1>Bienvenue</h1><p class="lede" style="margin:0">Traduis, double et revoice tes vidéos, depuis ton ordinateur ou ton téléphone.</p></div>
     </div>
     <div class="feats">
       <div class="feat"><span>🎬</span><div><b>Doubler</b><small>Une vidéo ou un lien YouTube, traduit avec une nouvelle voix.</small></div></div>
@@ -137,15 +137,15 @@
   <!-- 4. Terminé -->
   <section class="page" id="p-done">
     <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="#4ade9a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
-    <h1 style="margin-top:18px">Doublage est installé</h1>
+    <h1 style="margin-top:18px">Joue ta réplique est installé</h1>
     <p class="lede">Retrouve-le sur le Bureau et dans le menu Démarrer.</p>
     <div class="bar"><span class="sp"></span><button class="link" data-act="close">Fermer</button>
-      <button class="primary" data-act="launch">Lancer Doublage</button></div>
+      <button class="primary" data-act="launch">Lancer Joue ta réplique</button></div>
   </section>
 
   <!-- Désinstallation -->
   <section class="page" id="p-uninstall">
-    <h1>Désinstaller Doublage ?</h1>
+    <h1>Désinstaller Joue ta réplique ?</h1>
     <p class="lede">L'application, ses raccourcis et le moteur seront retirés de cet ordinateur.</p>
     <div class="card">
       <label class="toggle"><span>Supprimer aussi mes vidéos et mes réglages<small>Studio, bibliothèque, prises de voix</small></span>
@@ -157,7 +157,7 @@
   </section>
   <section class="page" id="p-uninstalled">
     <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="#4ade9a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
-    <h1 style="margin-top:18px">Doublage a été désinstallé</h1>
+    <h1 style="margin-top:18px">Joue ta réplique a été désinstallé</h1>
     <p class="lede" id="kept"></p>
     <div class="bar"><span class="sp"></span><button class="primary" data-act="close">Fermer</button></div>
   </section>
@@ -182,7 +182,7 @@
   window.init = (info) => {
     $("#dir").textContent = info.dir;
     $("#version").textContent = "Version " + info.version;
-    if (info.uninstall) { $("#brand-text").textContent = "Doublage"; go("p-uninstall"); }
+    if (info.uninstall) { $("#brand-text").textContent = "Joue ta réplique"; go("p-uninstall"); }
   };
   window.setDir = (dir) => { $("#dir").textContent = dir; };
   window.setStep = (label) => { $("#now").textContent = label; const i = STEPS.indexOf(label); if (i > reached) { reached = i; steps(); } };

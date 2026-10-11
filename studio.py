@@ -65,7 +65,7 @@ def _separate_and_transcribe():
     """La transcription du moteur, avec la séparation des voix forcée : elle produit aussi l'ambiance."""
     if find_spec("demucs") is None:
         raise RuntimeError("La séparation voix / ambiance (Demucs) n'est pas installée. "
-                           "Relance Doublage : l'installation se répare automatiquement.")
+                           "Relance Joue ta réplique : l'installation se répare automatiquement.")
     before = load_key_or("demucs", False)
     update_key("demucs", True)
     try:

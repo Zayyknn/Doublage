@@ -175,7 +175,7 @@ logs/
 videolingo_*.log
 .tools/
 
-# Doublage
+# Joue ta réplique
 /uploads/
 .doublage_password
 .tunnel.log

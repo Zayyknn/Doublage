@@ -30,15 +30,15 @@ jobs:
         shell: pwsh
         run: |
           Get-ChildItem dist | Format-Table Name, Length
-          if (-not (Test-Path dist\Doublage-Setup.exe)) { exit 1 }
-          if (-not (Test-Path dist\Doublage\Doublage.exe)) { exit 1 }
-          if (-not (Test-Path dist\Doublage\_internal\app\web.py)) { exit 1 }
-          if (-not (Test-Path dist\Doublage\_internal\uv.exe)) { exit 1 }
-          if (-not (Test-Path dist\Doublage\_internal\setup.html)) { exit 1 }
+          if (-not (Test-Path dist\JoueTaReplique-Setup.exe)) { exit 1 }
+          if (-not (Test-Path dist\JoueTaReplique\JoueTaReplique.exe)) { exit 1 }
+          if (-not (Test-Path dist\JoueTaReplique\_internal\app\web.py)) { exit 1 }
+          if (-not (Test-Path dist\JoueTaReplique\_internal\uv.exe)) { exit 1 }
+          if (-not (Test-Path dist\JoueTaReplique\_internal\setup.html)) { exit 1 }
       - uses: actions/upload-artifact@v4
         with:
-          name: Doublage-Windows
-          path: dist/Doublage-Setup.exe
+          name: JoueTaReplique-Windows
+          path: dist/JoueTaReplique-Setup.exe
 
   mac:
     runs-on: macos-14     # puces Apple (M1, M2, M3, M4…)
@@ -55,23 +55,24 @@ jobs:
         run: python launcher/build.py
       - name: Image disque (.dmg)
         run: |
-          test -d dist/Doublage.app
-          test -f dist/Doublage.app/Contents/Resources/app/web.py || test -f dist/Doublage.app/Contents/Frameworks/app/web.py
-          mkdir -p dmg && cp -R dist/Doublage.app dmg/
+          APP="dist/Joue ta réplique.app"
+          test -d "$APP"
+          test -f "$APP/Contents/Resources/app/web.py" || test -f "$APP/Contents/Frameworks/app/web.py"
+          mkdir -p dmg && cp -R "$APP" dmg/
           tiffutil -cathidpicheck launcher/dmg-background.png launcher/dmg-background@2x.png -out dmg-background.tiff
           for i in 1 2 3; do
-            create-dmg --volname "Doublage" --volicon launcher/icon.icns --background dmg-background.tiff \
+            create-dmg --volname "Joue ta réplique" --volicon launcher/icon.icns --background dmg-background.tiff \
               --window-pos 200 160 --window-size 660 420 --icon-size 110 --text-size 13 \
-              --icon "Doublage.app" 165 235 --hide-extension "Doublage.app" --app-drop-link 495 235 \
-              --no-internet-enable "dist/Doublage-Mac.dmg" dmg/ && break
+              --icon "Joue ta réplique.app" 165 235 --hide-extension "Joue ta réplique.app" --app-drop-link 495 235 \
+              --no-internet-enable "dist/JoueTaReplique-Mac.dmg" dmg/ && break
             sleep 10
           done
           ls -la dist
-          test -f "dist/Doublage-Mac.dmg"
+          test -f "dist/JoueTaReplique-Mac.dmg"
       - uses: actions/upload-artifact@v4
         with:
-          name: Doublage-Mac
-          path: dist/Doublage-Mac.dmg
+          name: JoueTaReplique-Mac
+          path: dist/JoueTaReplique-Mac.dmg
 
   release:
     needs: [windows, mac]
@@ -86,11 +87,11 @@ jobs:
         with:
           tag_name: v${{ inputs.version }}
           target_commitish: ${{ github.sha }}
-          name: Doublage ${{ inputs.version }}
+          name: Joue ta réplique ${{ inputs.version }}
           make_latest: true
           files: out/*
           body: |
-            **Windows** : télécharge `Doublage-Setup.exe` et lance-le.
-            **Mac** (M1, M2, M3, M4…) : ouvre `Doublage-Mac.dmg` et glisse Doublage dans Applications.
+            **Windows** : télécharge `JoueTaReplique-Setup.exe` et lance-le.
+            **Mac** (M1, M2, M3, M4…) : ouvre `JoueTaReplique-Mac.dmg` et glisse Joue ta réplique dans Applications.
 
-            Au premier lancement, Doublage installe son moteur (10 à 20 minutes, une seule fois).
+            Au premier lancement, Joue ta réplique installe son moteur (10 à 20 minutes, une seule fois).

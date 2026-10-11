@@ -1,9 +1,9 @@
-"""Doublage — l'application à double-cliquer (Windows .exe, Mac .app).
+"""Joue ta réplique — l'application à double-cliquer (Windows .exe, Mac .app).
 
-Doublage s'ouvre dans sa propre fenêtre (pywebview : Edge WebView2 sur Windows, WebKit sur Mac).
-Sans pywebview, une petite fenêtre simple prend le relais et Doublage s'ouvre dans le navigateur.
+Joue ta réplique s'ouvre dans sa propre fenêtre (pywebview : Edge WebView2 sur Windows, WebKit sur Mac).
+Sans pywebview, une petite fenêtre simple prend le relais et Joue ta réplique s'ouvre dans le navigateur.
 
-Elle contient le code de Doublage et l'outil `uv`. Au premier lancement, elle copie Doublage dans le dossier
+Elle contient le code de l'appli et l'outil `uv`. Au premier lancement, elle copie l'appli dans le dossier
 de l'utilisateur et installe tout (Python, modèles…) en montrant la progression. Ensuite elle démarre le moteur
 sans fenêtre de console, ouvre le navigateur, et l'arrête proprement quand on clique sur Quitter.
 """
@@ -22,7 +22,8 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-APP = "Doublage"
+APP = "Joue ta réplique"
+APP_DIR = "JoueTaReplique"  # nom des dossiers et fichiers : sans espace ni accent
 PORT = 8765
 URL = f"http://localhost:{PORT}"
 WINDOWS = sys.platform == "win32"
@@ -43,11 +44,11 @@ def home() -> Path:
         base = Path.home() / "Library" / "Application Support"
     else:
         base = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
-    return base / APP
+    return base / APP_DIR
 
 
 def install_files(src: Path, dst: Path) -> bool:
-    """Copie le code de Doublage s'il a changé. Garde les réglages et les vidéos de l'utilisateur."""
+    """Copie le code de l'appli s'il a changé. Garde les réglages et les vidéos de l'utilisateur."""
     version = (src / "VERSION").read_text(encoding="utf-8").strip() if (src / "VERSION").exists() else "dev"
     current = dst / "VERSION"
     if current.exists() and current.read_text(encoding="utf-8").strip() == version:
@@ -63,7 +64,7 @@ def install_files(src: Path, dst: Path) -> bool:
             shutil.copytree(item, target)
         else:
             shutil.copy2(item, target)
-    for script in ("lancer-doublage.sh",):
+    for script in ("lancer-jouetareplique.sh",):
         if (dst / script).exists():
             (dst / script).chmod(0o755)
     return True
@@ -93,16 +94,16 @@ STEPS = [
     (re.compile(r"\[5/6\]|spacy", re.I), "Installation de l'analyse du langage"),
     (re.compile(r"\[6/6\]|demucs", re.I), "Installation de la séparation des voix"),
     (re.compile(r"ffmpeg", re.I), "Installation des outils vidéo"),
-    (re.compile(r"Doublage est prêt", re.I), "Démarrage"),
+    (re.compile(r"est prêt", re.I), "Démarrage"),
 ]
 
 
 class Engine:
-    """Le moteur Doublage, lancé sans console. Les messages arrivent dans `events`."""
+    """Le moteur, lancé sans console. Les messages arrivent dans `events`."""
 
     def __init__(self, root: Path, source: Path | None = None, uv: Path | None = None, install_only: bool = False):
         self.root = root
-        self.source = source or bundle() / "app"     # code de Doublage à copier
+        self.source = source or bundle() / "app"     # code de l'appli à copier
         self.uv = uv or uv_path()
         self.install_only = install_only           # installateur : installe le moteur puis s'arrête
         self.proc: subprocess.Popen | None = None
@@ -119,7 +120,7 @@ class Engine:
             self.events.put(("step", "Préparation des fichiers"))
             fresh = install_files(self.source, self.root)
             if fresh:
-                self.events.put(("log", f"Doublage installé dans {self.root}"))
+                self.events.put(("log", f"Installé dans {self.root}"))
             if not self.install_only and server_ready():  # déjà lancé (deuxième clic sur l'icône)
                 self.events.put(("ready", None))
                 return
@@ -144,9 +145,9 @@ class Engine:
             if self.install_only and code == 0:
                 self.events.put(("done", None))
             elif code not in (0, None) and not getattr(self, "stopping", False):
-                self.events.put(("error", f"Doublage s'est arrêté (code {code}). Le détail est dans {self.log}"))
+                self.events.put(("error", f"Joue ta réplique s'est arrêté (code {code}). Le détail est dans {self.log}"))
         except Exception as exc:
-            self.events.put(("error", f"Impossible de démarrer Doublage : {exc}"))
+            self.events.put(("error", f"Impossible de démarrer Joue ta réplique : {exc}"))
 
     def _read(self, line: str):
         if not line.strip():
@@ -255,18 +256,18 @@ def run_window():
         webbrowser.open(URL)
 
     def quit_app():
-        status.configure(text="Arrêt de Doublage…")
+        status.configure(text="Arrêt de Joue ta réplique…")
         root.update()
         engine.stop()
         root.destroy()
 
-    open_btn = button(buttons, "Ouvrir Doublage", open_app, primary=True)
+    open_btn = button(buttons, "Ouvrir Joue ta réplique", open_app, primary=True)
     quit_btn = button(buttons, "Quitter", quit_app)
     quit_btn.pack(side="right")
     root.protocol("WM_DELETE_WINDOW", quit_app)
 
     if state["first"]:
-        status.configure(text="Première ouverture : installation de Doublage.\nCompte 10 à 20 minutes, une seule fois. "
+        status.configure(text="Première ouverture : installation de Joue ta réplique.\nCompte 10 à 20 minutes, une seule fois. "
                               "Laisse cette fenêtre ouverte.")
 
     def poll():
@@ -283,7 +284,7 @@ def run_window():
                     state["ready"] = True
                     bar.stop()
                     bar.configure(mode="determinate", value=100)
-                    status.configure(text="Doublage est prêt. Garde cette fenêtre ouverte (tu peux la réduire).", fg=TEXT)
+                    status.configure(text="Joue ta réplique est prêt. Garde cette fenêtre ouverte (tu peux la réduire).", fg=TEXT)
                     lines = []
                     if engine.lan:
                         lines.append(f"Sur ton téléphone (même Wi-Fi) : {engine.lan}")

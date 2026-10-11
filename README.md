@@ -1,4 +1,4 @@
-# Doublage
+# Joue ta réplique
 
 Double tes vidéos (fichiers MP4 ou liens YouTube) dans une autre langue, depuis ton PC ou ton téléphone.
 Transcription, traduction, nouvelle voix, mixage avec la musique d'origine et sous-titres : tout est automatique.
@@ -10,9 +10,9 @@ depuis n'importe quel navigateur, et s'installe comme une appli sur le télépho
 
 - **Doubler** : la vidéo est traduite et une voix (synthétique ou clonée) parle dans la nouvelle langue. Automatique.
 - **Studio** : un vrai studio de doublage maison. Tu mets n'importe quelle vidéo (extrait, épisode, film) :
-  les voix d'origine sont retirées et l'ambiance reste (musique, bruits). Doublage détecte **combien de personnes
+  les voix d'origine sont retirées et l'ambiance reste (musique, bruits). Joue ta réplique détecte **combien de personnes
   parlent** et qui dit quoi, puis affiche **une bande rythmo de couleur par personne**. Le texte défile et se colore
-  sous le trait rouge au moment exact où il faut le dire. Chacun enregistre ses répliques, et Doublage monte la vidéo finale.
+  sous le trait rouge au moment exact où il faut le dire. Chacun enregistre ses répliques, et Joue ta réplique monte la vidéo finale.
 
 ### Le Studio pas à pas
 
@@ -44,7 +44,7 @@ Sur téléphone, le micro du navigateur ne fonctionne qu'avec l'adresse https «
 | Clonage haut de gamme (option payante) | Fish Audio, CosyVoice2 via SiliconFlow | Pour la meilleure qualité |
 | Traduction gratuite sans IA | Google Traduction (comme pyVideoTrans) | Marche sans rien installer |
 | Traduction par IA | Ollama (gratuit, local) ou toute API compatible OpenAI | Plus naturelle : DeepSeek, Mistral, OpenAI… |
-| Interface web mobile, assistant de configuration, tunnel intégré, bibliothèque | Écrit pour Doublage | Utilisable depuis le téléphone, même hors de chez toi |
+| Interface web mobile, assistant de configuration, tunnel intégré, bibliothèque | Écrit pour Joue ta réplique | Utilisable depuis le téléphone, même hors de chez toi |
 
 Ce qui n'a **pas** été repris, et pourquoi : pyVideoTrans (licence GPL-3 et une appli de bureau séparée ;
 ses meilleures idées — voix multiples, YouTube, clonage — sont déjà couvertes ici), open-dubbing
@@ -55,11 +55,11 @@ L'interface d'origine de VideoLingo reste disponible pour les réglages avancés
 
 Télécharge la dernière version dans **Releases** (colonne de droite sur GitHub) :
 
-- **Windows** : `Doublage-Setup.exe` → l'assistant installe tout (l'application et son moteur), crée l'icône sur le Bureau.
-- **Mac** (puce Apple M1, M2, M3, M4…) : `Doublage-Mac.dmg` → glisse Doublage dans Applications. Au premier lancement,
+- **Windows** : `JoueTaReplique-Setup.exe` → l'assistant installe tout (l'application et son moteur), crée l'icône sur le Bureau.
+- **Mac** (puce Apple M1, M2, M3, M4…) : `JoueTaReplique-Mac.dmg` → glisse Joue ta réplique dans Applications. Au premier lancement,
   le moteur s'installe avec une barre de progression (10 à 20 minutes, une seule fois).
 
-Doublage s'ouvre ensuite dans sa propre fenêtre. Pour l'utiliser depuis un téléphone : Réglages → Téléphone.
+Joue ta réplique s'ouvre ensuite dans sa propre fenêtre. Pour l'utiliser depuis un téléphone : Réglages → Téléphone.
 
 L'application n'est pas signée par un certificat payant. La première fois :
 - Windows affiche « Windows a protégé votre ordinateur » → **Informations complémentaires → Exécuter quand même** ;
@@ -74,7 +74,7 @@ GitHub construit l'installateur Windows et le .dmg Mac, puis les publie dans Rel
 
 ### Sans installateur (développeurs)
 
-`Lancer-Doublage.bat` (Windows), `Lancer-Doublage.command` (Mac) ou `./lancer-doublage.sh` (Linux) depuis le code source.
+`Lancer-JoueTaReplique.bat` (Windows), `Lancer-JoueTaReplique.command` (Mac) ou `./lancer-jouetareplique.sh` (Linux) depuis le code source.
 
 ## Mot de passe
 
