@@ -570,6 +570,12 @@ def tunnel_toggle(data: dict = Body(...)):
     return jobs["tunnel"]
 
 
+# ------------------------------------------------------------------ studio (ma voix à la place)
+
+import studio  # noqa: E402
+studio.clear_output = _clear_output
+app.include_router(studio.router)
+
 # ------------------------------------------------------------------ interface
 
 app.mount("/", StaticFiles(directory=WEB, html=True), name="web")

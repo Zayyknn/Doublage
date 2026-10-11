@@ -66,6 +66,7 @@ const STEP_FR = {
   "Finalize dubbing outputs": "Finalisation",
 };
 const DUB_STEPS = Object.keys(STEP_FR);
+const STUDIO_STEPS = 3;
 const SUB_STEPS = DUB_STEPS.slice(0, 7);
 
 const LLM_PRESETS = [
@@ -359,6 +360,7 @@ function showResult(files) {
 async function poll() {
   try {
     const s = await api("/api/status");
+    if (s.total_steps === STUDIO_STEPS) { stopPolling(); return; } // préparation du Studio : gérée par studio.js
     if (["running", "paused", "stopping"].includes(s.state)) {
       showRun(s);
     } else {
@@ -502,7 +504,7 @@ function renderSystem() {
   $("#sys-detail").innerHTML = `${system.gpu ? "Carte graphique : " + escapeHtml(system.gpu) : "Aucune carte graphique détectée : ça marche, mais plus lentement."}<br>Installé : ${installed.join(", ") || "—"}`;
 }
 
-window.doublage = { api, post, toast, get settings() { return settings; }, set settings(v) { settings = v; },
+window.doublage = { api, post, toast, upload, fmtSize, LANGS, get settings() { return settings; }, set settings(v) { settings = v; },
   get system() { return system; }, set system(v) { system = v; }, renderSettings: () => renderSettings(), renderEngines: () => renderEngines(),
   renderSystem: () => renderSystem() };
 
@@ -519,6 +521,7 @@ window.doublage = { api, post, toast, get settings() { return settings; }, set s
   renderEngines();
   if (window.initSetup) window.initSetup();
   const s = await api("/api/status");
+  if (s.total_steps === STUDIO_STEPS) return;
   if (["running", "paused", "stopping"].includes(s.state)) startPolling();
   else if (s.files.some((f) => f.startsWith("output_dub") || f.startsWith("output_sub"))) showResult(s.files);
 })();

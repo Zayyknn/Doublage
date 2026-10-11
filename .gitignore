@@ -180,3 +180,4 @@ videolingo_*.log
 .doublage_password
 .tunnel.log
 /tools/
+/studio/
