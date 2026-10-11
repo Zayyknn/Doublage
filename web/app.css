@@ -189,7 +189,7 @@ nav.tabs button.on { color: var(--text); background: var(--glass-strong); }
 @media (min-width: 760px) {
   .app { padding-top: 34px; }
   h1 { font-size: 36px; }
-  nav.tabs { bottom: auto; top: 18px; left: auto; right: 24px; transform: none; flex-direction: row; }
+  nav.tabs { flex-direction: row; }
   nav.tabs button { flex-direction: row; font-size: 13.5px; gap: 7px; min-width: 0; }
   nav.tabs button svg { width: 17px; height: 17px; }
 }
