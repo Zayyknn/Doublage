@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Doublage</title>
+<style>
+  :root { --text:#f3f4f8; --muted:rgba(243,244,248,.6); --faint:rgba(243,244,248,.35); --accent:#8b7bff; --accent2:#4fd6ff; --bad:#ff6b81; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #07080d; color: var(--text); overflow: hidden; user-select: none;
+    font: 15px/1.45 ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+  .aurora { position: fixed; inset: 0; overflow: hidden; }
+  .aurora i { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .55; animation: drift 24s ease-in-out infinite alternate; }
+  .aurora i:nth-child(1) { width: 70vmax; height: 70vmax; left: -25vmax; top: -30vmax; background: #5b3dff; }
+  .aurora i:nth-child(2) { width: 55vmax; height: 55vmax; right: -25vmax; bottom: -20vmax; background: #0fb6ff; opacity: .35; animation-duration: 30s; }
+  @keyframes drift { to { transform: translate(5vmax, 4vmax) scale(1.08); } }
+  main { position: relative; height: 100%; display: grid; place-items: center; padding: 28px; }
+  .card { width: 100%; max-width: 460px; padding: 34px 32px 28px; border-radius: 26px; text-align: center;
+    background: linear-gradient(160deg, rgba(255,255,255,.09), rgba(255,255,255,.035)); border: 1px solid rgba(255,255,255,.12);
+    backdrop-filter: saturate(160%) blur(22px); -webkit-backdrop-filter: saturate(160%) blur(22px);
+    box-shadow: 0 1px 0 rgba(255,255,255,.08) inset, 0 30px 70px -25px rgba(0,0,0,.7); }
+  .logo { width: 72px; height: 72px; margin: 0 auto 14px; filter: drop-shadow(0 10px 30px rgba(139,123,255,.45)); }
+  h1 { margin: 0; font-size: 28px; letter-spacing: -.03em; }
+  .sub { color: var(--muted); margin: 6px 0 24px; min-height: 44px; }
+  .progress { height: 6px; border-radius: 99px; background: rgba(255,255,255,.09); overflow: hidden; }
+  .progress div { height: 100%; width: 35%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--accent2));
+    animation: slide 1.4s ease-in-out infinite; }
+  .progress.done div { width: 100%; animation: none; }
+  @keyframes slide { 0% { transform: translateX(-110%); } 100% { transform: translateX(320%); } }
+  .step { margin-top: 14px; font-size: 13.5px; color: var(--text); min-height: 20px; }
+  .log { margin-top: 4px; font: 11.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--faint);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 16px; }
+  .steps { list-style: none; padding: 0; margin: 20px 0 0; text-align: left; display: grid; gap: 7px; font-size: 13.5px; }
+  .steps li { display: flex; align-items: center; gap: 10px; color: var(--faint); }
+  .steps li::before { content: ""; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid currentColor; flex: none; }
+  .steps li.done { color: var(--muted); } .steps li.done::before { background: #4ade9a; border-color: #4ade9a; }
+  .steps li.now { color: var(--text); font-weight: 560; } .steps li.now::before { background: var(--accent2); border-color: var(--accent2); box-shadow: 0 0 10px var(--accent2); }
+  .err { color: #ffb3bf; background: rgba(255,107,129,.09); border: 1px solid rgba(255,107,129,.3); border-radius: 14px; padding: 12px 14px;
+    text-align: left; font-size: 13.5px; margin-top: 16px; display: none; user-select: text; }
+  .btns { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+  button { font: inherit; font-weight: 600; color: var(--text); padding: 11px 18px; border-radius: 13px; cursor: pointer;
+    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12); }
+  button.primary { border: 0; color: #0b0b12; background: linear-gradient(135deg, #b4a9ff, var(--accent) 45%, var(--accent2)); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="aurora"><i></i><i></i></div>
+<main>
+  <div class="card">
+    <svg class="logo" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b4a9ff"/><stop offset=".5" stop-color="#8b7bff"/><stop offset="1" stop-color="#4fd6ff"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="#0d0e16"/><rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="url(#g)" stroke-opacity=".5" stroke-width="2"/><g fill="url(#g)"><rect x="13" y="26" width="5" height="12" rx="2.5"/><rect x="21" y="19" width="5" height="26" rx="2.5"/><rect x="29" y="23" width="5" height="18" rx="2.5"/></g><path d="M39 22l13 10-13 10z" fill="url(#g)"/></svg>
+    <h1>Doublage</h1>
+    <p class="sub" id="sub">Démarrage…</p>
+    <div class="progress" id="bar"><div></div></div>
+    <div class="step" id="step"></div>
+    <div class="log" id="log"></div>
+    <ul class="steps hidden" id="steps"></ul>
+    <div class="err" id="err"></div>
+    <div class="btns hidden" id="btns">
+      <button id="logs">Voir le journal</button>
+      <button class="primary" id="retry">Réessayer</button>
+    </div>
+  </div>
+</main>
+<script>
+  const STEPS = ["Préparation de l'installation", "Installation de Python", "Installation du moteur IA (le plus long)",
+    "Installation des outils", "Installation de l'analyse du langage", "Installation de la séparation des voix",
+    "Installation des outils vidéo", "Démarrage"];
+  const $ = (s) => document.querySelector(s);
+  let first = false, reached = -1;
+  window.setFirst = (isFirst) => {
+    first = isFirst;
+    $("#sub").textContent = isFirst
+      ? "Première ouverture : installation du moteur. Une seule fois, 10 à 20 minutes selon ta connexion."
+      : "Démarrage du moteur…";
+    $("#steps").classList.toggle("hidden", !isFirst);
+    render();
+  };
+  window.setStep = (label) => {
+    $("#step").textContent = label;
+    const i = STEPS.indexOf(label);
+    if (i > reached) reached = i;
+    render();
+  };
+  window.setLog = (line) => { $("#log").textContent = line; };
+  window.setReady = () => {
+    $("#bar").classList.add("done");
+    $("#sub").textContent = "C'est prêt.";
+    $("#step").textContent = ""; $("#log").textContent = "";
+  };
+  window.setError = (message) => {
+    $("#bar").classList.add("hidden");
+    $("#err").textContent = message; $("#err").style.display = "block";
+    $("#btns").classList.remove("hidden");
+  };
+  function render() {
+    if (!first) return;
+    $("#steps").innerHTML = STEPS.slice(1, 7).map((s, k) => {
+      const i = k + 1;
+      return `<li class="${i < reached ? "done" : i === reached ? "now" : ""}">${s.replace(" (le plus long)", "")}</li>`;
+    }).join("");
+  }
+  $("#logs").onclick = () => window.pywebview && window.pywebview.api.open_log();
+  $("#retry").onclick = () => window.pywebview && window.pywebview.api.retry();
+</script>
+</body>
+</html>

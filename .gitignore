@@ -181,3 +181,7 @@ videolingo_*.log
 .tunnel.log
 /tools/
 /studio/
+
+# Construction des applications
+/build/
+/dist/

@@ -379,7 +379,13 @@
     try {
       stream = stream && stream.active ? stream : await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
-    } catch { return D.toast("Micro inaccessible : autorise-le dans le navigateur.", 5000); }
+    } catch {
+      if (window.pywebview && confirm("Le micro n'est pas accessible dans cette fenêtre. Ouvrir Doublage dans ton navigateur pour enregistrer ?")) {
+        window.pywebview.api.open_browser();
+        return;
+      }
+      return D.toast("Micro inaccessible : autorise-le dans le navigateur.", 5000);
+    }
     await swapSource("ambiance.mp4");
     if (video.duration && video.currentTime >= video.duration - 0.5) video.currentTime = 0;
     recFrom = video.currentTime;
