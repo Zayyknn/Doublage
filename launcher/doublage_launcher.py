@@ -100,8 +100,11 @@ STEPS = [
 class Engine:
     """Le moteur Doublage, lancé sans console. Les messages arrivent dans `events`."""
 
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, source: Path | None = None, uv: Path | None = None, install_only: bool = False):
         self.root = root
+        self.source = source or bundle() / "app"     # code de Doublage à copier
+        self.uv = uv or uv_path()
+        self.install_only = install_only           # installateur : installe le moteur puis s'arrête
         self.proc: subprocess.Popen | None = None
         self.events: queue.Queue = queue.Queue()
         self.password = None
@@ -114,21 +117,23 @@ class Engine:
     def _run(self):
         try:
             self.events.put(("step", "Préparation des fichiers"))
-            fresh = install_files(bundle() / "app", self.root)
+            fresh = install_files(self.source, self.root)
             if fresh:
                 self.events.put(("log", f"Doublage installé dans {self.root}"))
-            if server_ready():  # déjà lancé (deuxième clic sur l'icône)
+            if not self.install_only and server_ready():  # déjà lancé (deuxième clic sur l'icône)
                 self.events.put(("ready", None))
                 return
             self.log.parent.mkdir(exist_ok=True)
             env = dict(os.environ, PYTHONUTF8="1", PYTHONUNBUFFERED="1", DOUBLAGE_NO_BROWSER="1",
-                       UV_PYTHON_PREFERENCE="only-managed", PATH=str(bundle()) + os.pathsep + os.environ.get("PATH", ""))
+                       UV_PYTHON_PREFERENCE="only-managed", PATH=str(self.uv.parent) + os.pathsep + os.environ.get("PATH", ""))
             self.proc = subprocess.Popen(
-                [str(uv_path()), "run", "--no-project", "--python", "3.12", "start.py", "--web"],
+                [str(self.uv), "run", "--no-project", "--python", "3.12", "start.py",
+                 "--install-only" if self.install_only else "--web"],
                 cwd=self.root, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                 text=True, encoding="utf-8", errors="replace", creationflags=NO_WINDOW,
                 start_new_session=not WINDOWS)
-            threading.Thread(target=self._watch_ready, daemon=True).start()
+            if not self.install_only:
+                threading.Thread(target=self._watch_ready, daemon=True).start()
             with open(self.log, "a", encoding="utf-8") as log:
                 log.write(f"\n===== {time.strftime('%Y-%m-%d %H:%M:%S')} =====\n")
                 for line in self.proc.stdout:
@@ -136,7 +141,9 @@ class Engine:
                     log.flush()
                     self._read(line.rstrip())
             code = self.proc.wait()
-            if code not in (0, None) and not getattr(self, "stopping", False):
+            if self.install_only and code == 0:
+                self.events.put(("done", None))
+            elif code not in (0, None) and not getattr(self, "stopping", False):
                 self.events.put(("error", f"Doublage s'est arrêté (code {code}). Le détail est dans {self.log}"))
         except Exception as exc:
             self.events.put(("error", f"Impossible de démarrer Doublage : {exc}"))
@@ -362,6 +369,10 @@ def run_webview():
 
 
 def main():
+    if "--uninstall" in sys.argv:
+        import setup_app
+        setup_app.run(uninstall=True)
+        return
     if "--headless" in sys.argv:  # test sans fenêtre
         engine = Engine(home())
         engine.start()

@@ -47,6 +47,7 @@ def main() -> int:
     mode.add_argument("--voix", action="store_true", help="install the optional local voices (Kokoro, Chatterbox)")
     mode.add_argument("--streamlit", action="store_true", help="start the original VideoLingo interface (advanced settings)")
     mode.add_argument("--check", action="store_true", help="check the environment without installing or launching")
+    mode.add_argument("--install-only", action="store_true", help="install or repair, then exit (used by the Windows installer)")
     args = parser.parse_args()
 
     candidates = [(venv, venv / PYTHON_RELATIVE) for venv in (SHARED_VENV, LOCAL_VENV)]
@@ -78,6 +79,9 @@ def main() -> int:
         print("ERROR: VideoLingo's Python environment was not created.")
         return 1
 
+    if args.install_only:
+        print("Doublage est installé.")
+        return 0
     if args.voix:
         command = ["installer_voix.py"]
     elif args.api:

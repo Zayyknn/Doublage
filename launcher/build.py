@@ -66,6 +66,7 @@ def main():
     (app / "VERSION").write_text(version, encoding="utf-8")
     shutil.copy2(ROOT / "launcher" / "icon.png", BUNDLE / "icon.png")
     shutil.copy2(ROOT / "launcher" / "splash.html", BUNDLE / "splash.html")
+    shutil.copy2(ROOT / "launcher" / "setup.html", BUNDLE / "setup.html")
     fetch_uv()
 
     sep = ";" if sys.platform == "win32" else ":"
@@ -73,7 +74,8 @@ def main():
     args = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--windowed", "--name", "Doublage",
             "--icon", str(icon), "--distpath", str(ROOT / "dist"), "--workpath", str(BUILD / "work"),
             "--specpath", str(BUILD), "--add-data", f"{app}{sep}app", "--add-data", f"{BUNDLE / 'icon.png'}{sep}.",
-            "--add-data", f"{BUNDLE / 'splash.html'}{sep}.",
+            "--add-data", f"{BUNDLE / 'splash.html'}{sep}.", "--add-data", f"{BUNDLE / 'setup.html'}{sep}.",
+            "--paths", str(ROOT / "launcher"), "--hidden-import", "setup_app",
             "--add-binary", f"{BUNDLE / ('uv.exe' if sys.platform == 'win32' else 'uv')}{sep}."]
     if sys.platform == "darwin":
         args += ["--osx-bundle-identifier", "app.doublage.launcher"]
@@ -88,6 +90,14 @@ def main():
                      "NSHighResolutionCapable": True, "LSMinimumSystemVersion": "11.0"})
         plist.write_bytes(plistlib.dumps(info))
         subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(plist.parent.parent)], check=True)
+    if sys.platform == "win32":  # Doublage-Setup.exe : un seul fichier qui contient l'application et l'installateur
+        subprocess.run([sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onefile", "--windowed",
+                        "--name", "Doublage-Setup", "--icon", str(icon), "--distpath", str(ROOT / "dist"),
+                        "--workpath", str(BUILD / "work-setup"), "--specpath", str(BUILD),
+                        "--paths", str(ROOT / "launcher"),
+                        "--add-data", f"{ROOT / 'dist' / 'Doublage'}{sep}payload/Doublage",
+                        "--add-data", f"{BUNDLE / 'setup.html'}{sep}.", "--add-data", f"{BUNDLE / 'icon.png'}{sep}.",
+                        str(ROOT / "launcher" / "setup_entry.py")], check=True)
     print("Construit dans", ROOT / "dist")
 
 
