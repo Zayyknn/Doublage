@@ -53,26 +53,28 @@ L'interface d'origine de VideoLingo reste disponible pour les réglages avancés
 
 ## Installation
 
-**Rien à configurer à la main.** Télécharge le dépôt (bouton vert **Code → Download ZIP**), dézippe-le, puis :
+Télécharge la dernière version dans **Releases** (colonne de droite sur GitHub) :
 
-- **Windows** : double-clique **`Lancer-Doublage.bat`**
-- **Mac** : double-clique **`Lancer-Doublage.command`** (la 1re fois : clic droit → Ouvrir → Ouvrir)
-- **Linux** : `./lancer-doublage.sh`
+- **Windows** : `Doublage-Setup.exe` → l'assistant installe tout (l'application et son moteur), crée l'icône sur le Bureau.
+- **Mac** (puce Apple M1, M2, M3, M4…) : `Doublage-Mac.dmg` → glisse Doublage dans Applications. Au premier lancement,
+  le moteur s'installe avec une barre de progression (10 à 20 minutes, une seule fois).
 
-Le premier lancement installe tout seul ce qu'il faut (10 à 20 minutes). Ensuite la page s'ouvre
-dans le navigateur et un **assistant** guide en 3 écrans :
+Doublage s'ouvre ensuite dans sa propre fenêtre. Pour l'utiliser depuis un téléphone : Réglages → Téléphone.
 
-1. **Traduction** : *Gratuit, tout de suite* (Google Traduction, rien à installer), *Gratuit et plus naturel*
-   (Ollama : un bouton pour le télécharger, un autre pour récupérer le modèle, avec la progression), ou une clé API.
-2. **Voix** : les voix Edge sont prêtes ; un bouton installe en arrière-plan les voix locales Kokoro et Chatterbox.
-3. **Téléphone** : QR code pour l'ouvrir sur le même Wi-Fi, et un interrupteur « Accès depuis partout »
-   qui télécharge et lance tout seul un tunnel Cloudflare gratuit (QR code et mot de passe affichés).
+L'application n'est pas signée par un certificat payant. La première fois :
+- Windows affiche « Windows a protégé votre ordinateur » → **Informations complémentaires → Exécuter quand même** ;
+- macOS refuse de l'ouvrir → **Réglages Système → Confidentialité et sécurité → Ouvrir quand même**.
 
-Laisse la fenêtre noire (Terminal) ouverte pendant l'utilisation : c'est le moteur.
-Tout se règle ensuite dans l'onglet **Réglages**, où l'assistant peut être relancé.
+Prévoir environ 15 Go d'espace libre. Une carte NVIDIA (PC) ou une puce Apple (Mac) accélère beaucoup.
 
-Sur Mac, une puce Apple (M1, M2, M3, M4…) est idéale. Sur PC, une carte NVIDIA accélère beaucoup ;
-sans elle, ça marche, plus lentement. Prévoir environ 15 Go d'espace libre.
+### Publier une nouvelle version
+
+Onglet **Actions** → « Applications Windows et Mac » → **Run workflow**, avec le numéro de version.
+GitHub construit l'installateur Windows et le .dmg Mac, puis les publie dans Releases.
+
+### Sans installateur (développeurs)
+
+`Lancer-Doublage.bat` (Windows), `Lancer-Doublage.command` (Mac) ou `./lancer-doublage.sh` (Linux) depuis le code source.
 
 ## Mot de passe
 
