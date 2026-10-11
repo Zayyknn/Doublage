@@ -2,8 +2,7 @@ name: Applications Windows et Mac
 
 on:
   push:
-    branches: [main]
-    tags: ["v*"]
+    tags: ["v*"]          # une nouvelle version : git tag v1.0.1 && git push --tags
   workflow_dispatch:
 
 permissions:
@@ -53,7 +52,7 @@ jobs:
         include:
           - runner: macos-14   # puces Apple (M1, M2, M3, M4…)
             arch: AppleSilicon
-          - runner: macos-13   # Mac Intel
+          - runner: macos-15-intel   # Mac Intel
             arch: Intel
     runs-on: ${{ matrix.runner }}
     continue-on-error: ${{ matrix.arch == 'Intel' }}
