@@ -38,21 +38,48 @@ def version() -> str:
     return "1.0.0"
 
 
+KNOWN_FOLDERS = {  # identifiants Windows des dossiers spéciaux
+    "Desktop": "{B4BFCC3A-DB2C-424C-B029-7FE99A87C641}",
+    "Programs": "{A77F5D77-2E2B-44C3-A6A2-ABA601054A51}",
+}
+
+
 def shell_folder(name: str) -> Path:
-    """Bureau / menu Démarrer de l'utilisateur, même s'ils sont déplacés (OneDrive…)."""
-    script = f"[Environment]::GetFolderPath('{name}')"
-    out = subprocess.run(["powershell", "-NoProfile", "-Command", script], capture_output=True, text=True,
-                         creationflags=L.NO_WINDOW).stdout.strip()
-    return Path(out)
+    """Bureau / menu Démarrer de l'utilisateur, même déplacés (OneDrive…) ou avec des accents."""
+    import ctypes
+    from ctypes import wintypes
+    import uuid
+
+    class GUID(ctypes.Structure):
+        _fields_ = [("d1", wintypes.DWORD), ("d2", wintypes.WORD), ("d3", wintypes.WORD), ("d4", ctypes.c_ubyte * 8)]
+
+    u = uuid.UUID(KNOWN_FOLDERS[name])
+    guid = GUID(u.fields[0], u.fields[1], u.fields[2], (ctypes.c_ubyte * 8)(*u.bytes[8:]))
+    out = ctypes.c_wchar_p()
+    if ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(guid), 0, None, ctypes.byref(out)) != 0:
+        fallback = {"Desktop": Path.home() / "Desktop",
+                    "Programs": Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs"}
+        return fallback[name]
+    try:
+        return Path(out.value)
+    finally:
+        ctypes.windll.ole32.CoTaskMemFree(out)
 
 
 def shortcut(path: Path, target: Path, args: str = "", description: str = "Joue ta réplique"):
+    """Raccourci .lnk. Les chemins passent par des variables d'environnement : accents, espaces et
+    apostrophes arrivent intacts à PowerShell, sans aucun échappement."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    ps = ("$s = (New-Object -ComObject WScript.Shell).CreateShortcut({p}); $s.TargetPath = {t}; $s.Arguments = {a}; "
-          "$s.WorkingDirectory = {w}; $s.IconLocation = {i}; $s.Description = {d}; $s.Save()").format(
-        p=json.dumps(str(path)), t=json.dumps(str(target)), a=json.dumps(args), w=json.dumps(str(target.parent)),
-        i=json.dumps(f"{target},0"), d=json.dumps(description))
-    subprocess.run(["powershell", "-NoProfile", "-Command", ps], check=True, capture_output=True, creationflags=L.NO_WINDOW)
+    env = dict(os.environ, JTR_LNK=str(path), JTR_TARGET=str(target), JTR_ARGS=args,
+               JTR_DIR=str(target.parent), JTR_ICON=f"{target},0", JTR_DESC=description)
+    ps = ("$s = (New-Object -ComObject WScript.Shell).CreateShortcut($env:JTR_LNK); $s.TargetPath = $env:JTR_TARGET; "
+          "$s.Arguments = $env:JTR_ARGS; $s.WorkingDirectory = $env:JTR_DIR; $s.IconLocation = $env:JTR_ICON; "
+          "$s.Description = $env:JTR_DESC; $s.Save()")
+    result = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps],
+                            env=env, capture_output=True, creationflags=L.NO_WINDOW)
+    if result.returncode != 0 or not path.exists():
+        detail = result.stderr.decode("utf-8", "replace").strip().splitlines()
+        raise RuntimeError(f"le raccourci « {path.name} » n'a pas pu être créé ({detail[-1] if detail else 'erreur inconnue'})")
 
 
 def register(install_dir: Path, size_mb: int):
@@ -134,10 +161,12 @@ def run(uninstall: bool = False):
             shutil.copytree(payload(), target, dirs_exist_ok=True)
             exe = target / "JoueTaReplique.exe"
             js("setStep", "Création des raccourcis")
-            if options.get("desktop"):
-                shortcut(shell_folder("Desktop") / "Joue ta réplique.lnk", exe)
-            if options.get("startmenu"):
-                shortcut(shell_folder("Programs") / "Joue ta réplique.lnk", exe)
+            for wanted, folder in (("desktop", "Desktop"), ("startmenu", "Programs")):
+                if options.get(wanted):
+                    try:
+                        shortcut(shell_folder(folder) / "Joue ta réplique.lnk", exe)
+                    except Exception as exc:  # l'appli reste installée, on le signale seulement
+                        js("setLog", f"Raccourci non créé : {exc}")
             size = sum(f.stat().st_size for f in target.rglob("*") if f.is_file()) // (1 << 20)
             register(target, size + 6000)  # + le moteur installé au premier lancement
 
@@ -180,7 +209,7 @@ def run(uninstall: bool = False):
                 pass
             # Le dossier de l'application contient ce programme : il est effacé juste après sa fermeture
             script = Path(tempfile.gettempdir()) / "doublage-uninstall.cmd"
-            script.write_text(f'@echo off\r\ntimeout /t 2 /nobreak >nul\r\nrmdir /s /q "{target}"\r\ndel "%~f0"\r\n', encoding="utf-8")
+            script.write_text(f'@echo off\r\nchcp 65001 >nul\r\ntimeout /t 2 /nobreak >nul\r\nrmdir /s /q "{target}"\r\ndel "%~f0"\r\n', encoding="utf-8")
             subprocess.Popen(["cmd", "/c", str(script)], creationflags=L.NO_WINDOW | 0x00000008)
             kept = "" if purge else f"Tes vidéos et réglages sont gardés dans {data}."
             js("setUninstalled", kept)
