@@ -324,3 +324,5 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
   #st-editor > .text-card { position: sticky; top: 16px; }
   #st-editor .lines { max-height: calc(100vh - 260px); }
 }
+
+.sep-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: -4px 0 14px; font-size: 13px; color: var(--muted); }

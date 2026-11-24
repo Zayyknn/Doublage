@@ -39,6 +39,34 @@ def speakers_meta(count: int, previous: list | None = None) -> list:
              "color": COLORS[i % len(COLORS)]} for i in range(max(1, count))]
 
 
+# ------------------------------------------------------------------ retrait des voix (ambiance seule)
+
+SEPARATION_MODEL = "model_bs_roformer_ep_317_sdr_12.9755.ckpt"   # BS-RoFormer (viperx) : mesuré sur un dialogue
+# mêlé à de la musique, il reste -28 dB de dialogue dans l'ambiance en moyenne (-11 dB au pire passage),
+# contre -21 dB (-4 dB au pire, les « ah » qu'on entend) avec Demucs htdemucs.
+
+
+def separate_voices(media: Path, ambiance_wav: Path, vocals_wav: Path):
+    """Sépare voix et ambiance sur le son d'origine en pleine qualité (stéréo 44,1 kHz)."""
+    from audio_separator.separator import Separator
+    work = ambiance_wav.parent / "_separation"
+    shutil.rmtree(work, ignore_errors=True)
+    work.mkdir(parents=True)
+    try:
+        source = work / "source.wav"
+        ffmpeg("-i", str(media), "-map", "0:a:0", "-vn", "-ac", "2", "-ar", "44100", "-c:a", "pcm_f32le", str(source))
+        sep = Separator(output_dir=str(work), output_format="WAV", model_file_dir=str(ROOT / "_model_cache" / "separation"),
+                        log_level=30)
+        sep.load_model(model_filename=SEPARATION_MODEL)
+        files = [work / Path(f).name for f in sep.separate(str(source))]
+        inst = next(f for f in files if "(instrumental)" in f.name.lower())
+        voc = next(f for f in files if "(vocals)" in f.name.lower())
+        shutil.move(str(inst), ambiance_wav)
+        shutil.move(str(voc), vocals_wav)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
 # ------------------------------------------------------------------ qui parle quand (diarisation)
 
 def _download(url: str, target: Path, progress=None):

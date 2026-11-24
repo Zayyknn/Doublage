@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import threading
@@ -88,10 +89,21 @@ def _build(project_dir: Path, title: str):
     video = ["-c:v", "copy"] if h264 else ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p"]
     core.ffmpeg("-i", str(media), "-map", "0:v:0", "-map", "0:a:0", *video, "-c:a", "aac", "-b:a", "160k",
                 "-movflags", "+faststart", str(project_dir / "original.mp4"))
-    core.ffmpeg("-i", str(project_dir / "original.mp4"), "-i", _BACKGROUND_AUDIO_FILE, "-map", "0:v:0", "-map", "1:a:0",
-                "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart",
+    # Ambiance sans les voix : BS-RoFormer sur le son d'origine en pleine qualité. La séparation Demucs de la
+    # transcription (mono, 32 kHz, MP3) ne sert plus que de repli.
+    ambiance, vocals, separation = Path(_BACKGROUND_AUDIO_FILE), Path(_VOCAL_AUDIO_FILE), "demucs"
+    try:
+        hq_ambiance, hq_vocals = project_dir / "_ambiance.wav", project_dir / "_vocals.wav"
+        core.separate_voices(media, hq_ambiance, hq_vocals)
+        ambiance, vocals, separation = hq_ambiance, hq_vocals, "roformer"
+    except Exception as exc:
+        print(f"Séparation haute qualité impossible, repli sur Demucs : {exc}")
+    core.ffmpeg("-i", str(project_dir / "original.mp4"), "-i", str(ambiance), "-map", "0:v:0", "-map", "1:a:0",
+                "-c:v", "copy", "-c:a", "aac", "-b:a", "256k", "-shortest", "-movflags", "+faststart",
                 str(project_dir / "ambiance.mp4"))
-    core.ffmpeg("-i", _VOCAL_AUDIO_FILE, "-c:a", "aac", "-b:a", "128k", str(project_dir / "vocals.m4a"))
+    core.ffmpeg("-i", str(vocals), "-c:a", "aac", "-b:a", "160k", str(project_dir / "vocals.m4a"))
+    for tmp in (project_dir / "_ambiance.wav", project_dir / "_vocals.wav"):
+        tmp.unlink(missing_ok=True)
 
     words = []
     for _, row in pd.read_excel(_2_CLEANED_CHUNKS).iterrows():
@@ -101,7 +113,7 @@ def _build(project_dir: Path, title: str):
     write(project_dir, "words.json", words)
     write(project_dir, "clips.json", [])
     duration = float(core.probe(project_dir / "original.mp4", "v:0", "format=duration") or 0) or None
-    write(project_dir, "meta.json", {"title": title, "created": time.time(), "duration": duration,
+    write(project_dir, "meta.json", {"title": title, "created": time.time(), "duration": duration, "separation": separation,
                                      "speakers": core.speakers_meta(1), "latency_ms": 0,
                                      "mix": {"voice": 1.2, "ambience": 1.0, "keep_original": True, "original": 1.0}})
 
@@ -224,6 +236,39 @@ def recount(project_id: str, data: dict = Body(...)):
         except Exception as exc:
             job["error"] = str(exc)
         finally:
+            job["running"] = False
+
+    threading.Thread(target=run, daemon=True).start()
+    return job
+
+
+@router.post("/{project_id}/separate", status_code=202)
+def reseparate(project_id: str):
+    """Refait l'ambiance d'un projet existant avec la séparation haute qualité."""
+    path = project(project_id)
+    if jobs.get(project_id, {}).get("running"):
+        return jobs[project_id]
+    job = jobs[project_id] = {"running": True, "progress": 0.0, "error": None, "kind": "separate"}
+
+    def run():
+        hq_ambiance, hq_vocals = path / "_ambiance.wav", path / "_vocals.wav"
+        try:
+            core.separate_voices(path / "original.mp4", hq_ambiance, hq_vocals)
+            core.ffmpeg("-i", str(path / "original.mp4"), "-i", str(hq_ambiance), "-map", "0:v:0", "-map", "1:a:0",
+                        "-c:v", "copy", "-c:a", "aac", "-b:a", "256k", "-shortest", "-movflags", "+faststart",
+                        str(path / "ambiance.new.mp4"))
+            core.ffmpeg("-i", str(hq_vocals), "-c:a", "aac", "-b:a", "160k", str(path / "vocals.new.m4a"))
+            os.replace(path / "ambiance.new.mp4", path / "ambiance.mp4")
+            os.replace(path / "vocals.new.m4a", path / "vocals.m4a")
+            with lock:
+                meta = read(path, "meta.json", {})
+                meta["separation"] = "roformer"
+                write(path, "meta.json", meta)
+        except Exception as exc:
+            job["error"] = f"Retrait des voix impossible : {exc}"
+        finally:
+            for tmp in (hq_ambiance, hq_vocals, path / "ambiance.new.mp4", path / "vocals.new.m4a"):
+                tmp.unlink(missing_ok=True)
             job["running"] = False
 
     threading.Thread(target=run, daemon=True).start()

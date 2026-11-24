@@ -187,7 +187,8 @@
     $("#st-mic-warn").textContent = secure ? "" : "Le micro du navigateur demande une adresse sécurisée (https). Sur le téléphone, ouvre Joue ta réplique avec l'adresse « Accès depuis partout » (Réglages → Téléphone).";
     $("#st-sp-warn").classList.toggle("hidden", !proj.speakers_error);
     $("#st-sp-warn").textContent = proj.speakers_error || "";
-    if (proj.job && proj.job.running) watchJob();
+    sepInfo();
+    if (proj.job && proj.job.running) (proj.job.kind === "separate" ? watchSep() : watchJob());
     window.scrollTo({ top: 0 });
     resize();
   }
@@ -527,6 +528,36 @@
     try { await D.post(`/api/studio/${encodeURIComponent(proj.id)}/speakers`, { count: Number($("#st-recount").value) }); watchJob(); }
     catch (e) { D.toast(e.message); }
   };
+  // ------------------------------------------------------------ refaire le retrait des voix
+  function sepInfo() {
+    $("#st-sep-info").textContent = proj.separation === "roformer" ? "Voix retirées en haute qualité"
+      : "Voix retirées avec l'ancienne méthode : des voix peuvent rester";
+  }
+  $("#st-sep-go").onclick = async () => {
+    stopAll();
+    try { await D.post(`/api/studio/${encodeURIComponent(proj.id)}/separate`); watchSep(); }
+    catch (e) { D.toast(e.message); }
+  };
+  function watchSep() {
+    const st = $("#st-sep-status"), id = proj.id;
+    $("#st-sep-go").disabled = true;
+    st.classList.remove("hidden");
+    st.innerHTML = `<span class="dot warn"></span>Retrait des voix en cours… (une à quelques minutes)`;
+    const timer = setInterval(async () => {
+      let p;
+      try { p = await D.api(`/api/studio/${encodeURIComponent(id)}`); } catch { return; }
+      if (p.job && p.job.running) return;
+      clearInterval(timer);
+      st.classList.add("hidden"); $("#st-sep-go").disabled = false;
+      if (!proj || proj.id !== id) return;
+      if (p.job && p.job.error) return D.toast(p.job.error, 6000);
+      proj.separation = p.separation; sepInfo();
+      const t = video.currentTime || 0, bust = "?t=" + Date.now();
+      video.src = url("ambiance.mp4") + bust; vocals.src = url("vocals.m4a") + bust;
+      video.addEventListener("loadedmetadata", () => { video.currentTime = t; }, { once: true });
+      D.toast("Voix retirées en haute qualité");
+    }, 2000);
+  }
   function watchJob() {
     clearInterval(jobPoller);
     const st = $("#st-recount-status");

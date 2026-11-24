@@ -30,6 +30,10 @@ edge-tts>=7.2.8,<8
 # Studio : qui parle quand (diarisation), modèles ONNX téléchargés au premier usage
 sherpa-onnx>=1.10.0,<2
 soundfile>=0.12
+# Studio : retrait des voix de qualité (BS-RoFormer). 0.46+ exige torch>=2.13 sur Mac Apple Silicon
+audio-separator>=0.44,<0.46
+audioread>=3
+onnxruntime>=1.17
 
 # Default local ASR: Qwen3-ASR + Qwen3-ForcedAligner (core/asr_backend/qwen_asr_local.py).
 # Apple Silicon uses MLX (mlx-audio); every mlx-audio release with Qwen3-ASR needs
