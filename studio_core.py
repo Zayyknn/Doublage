@@ -111,7 +111,87 @@ def diarize(audio: Path, num_speakers: int = -1, progress=None) -> list[tuple[fl
         return 0
 
     result = sd.process(samples, callback=callback).sort_by_start_time()
-    return [(float(r.start), float(r.end), int(r.speaker)) for r in result]
+    segments = [(float(r.start), float(r.end), int(r.speaker)) for r in result]
+    if num_speakers <= 0:
+        extractor = sherpa_onnx.SpeakerEmbeddingExtractor(config.embedding)
+        segments = regroup_voices(segments, samples, sd.sample_rate, extractor)
+    return segments
+
+
+SAME_VOICE = 0.5       # ressemblance moyenne (cosinus) entre passages au-delà de laquelle c'est la même voix
+                       # mesuré sur des passages de 1 à 4 s : même voix 0,5-0,9, voix différentes 0,1-0,35
+MIN_SPEECH = 2.5       # en dessous, en secondes, ce n'est pas une personne de plus : on la rattache à la plus proche
+PIECE = 8.0            # longueur des morceaux analysés, en secondes
+
+
+def regroup_voices(segments, samples, rate, extractor) -> list[tuple[float, float, int]]:
+    """Compte automatique : le découpage de départ coupe souvent une même voix en plusieurs (téléphone, cri,
+    autre ton) et se trompe de personne. On refait le regroupement nous-mêmes : une empreinte de voix par
+    morceau de parole, puis on réunit les morceaux qui se ressemblent (moyenne des ressemblances)."""
+    import numpy as np
+
+    def embed(s, e):
+        stream = extractor.create_stream()
+        stream.accept_waveform(rate, np.ascontiguousarray(samples[int(s * rate):int(e * rate)]))
+        stream.input_finished()
+        v = np.array(extractor.compute(stream), dtype=np.float32)
+        return v / (np.linalg.norm(v) or 1)
+
+    pieces = []                                   # (début, fin, empreinte ou None si trop court)
+    for s, e, _ in segments:
+        n = max(1, round((e - s) / PIECE))
+        step = (e - s) / n
+        for i in range(n):
+            a, b = s + i * step, s + (i + 1) * step
+            pieces.append([a, b, embed(a, b) if b - a >= 0.8 else None])
+    if not pieces:
+        return segments
+    clusters = [[i] for i, p in enumerate(pieces) if p[2] is not None]
+    if not clusters:
+        return [(s, e, 0) for s, e, _ in segments]
+    vec = np.stack([pieces[c[0]][2] for c in clusters])
+    sim = vec @ vec.T
+    np.fill_diagonal(sim, -1)
+    size = [1] * len(clusters)
+    alive = list(range(len(clusters)))
+    while len(alive) > 1:                         # regroupement hiérarchique, lien moyen
+        sub = sim[np.ix_(alive, alive)]
+        i, j = np.unravel_index(np.argmax(sub), sub.shape)
+        if sub[i, j] < SAME_VOICE:
+            break
+        a, b = alive[i], alive[j]
+        sim[a, :] = (sim[a, :] * size[a] + sim[b, :] * size[b]) / (size[a] + size[b])
+        sim[:, a] = sim[a, :]
+        sim[a, a] = -1
+        size[a] += size[b]
+        clusters[a] += clusters[b]
+        alive.remove(b)
+    groups = [clusters[k] for k in alive]
+
+    def centroid(g):
+        v = np.mean([pieces[i][2] for i in g], axis=0)
+        return v / (np.linalg.norm(v) or 1)
+
+    # Une « personne » qui parle moins de MIN_SPEECH secondes en tout est rattachée à la voix la plus proche
+    while len(groups) > 1:
+        talk = [sum(pieces[i][1] - pieces[i][0] for i in g) for g in groups]
+        k = int(np.argmin(talk))
+        if talk[k] >= MIN_SPEECH:
+            break
+        c = centroid(groups[k])
+        others = [o for o in range(len(groups)) if o != k]
+        best = max(others, key=lambda o: float(centroid(groups[o]) @ c))
+        groups[best] += groups.pop(k)
+    label = {}
+    for n, g in enumerate(groups):
+        for i in g:
+            label[i] = n
+    cents = [centroid(g) for g in groups]
+    for i, p in enumerate(pieces):                # morceaux trop courts : la voix du morceau voisin le plus proche
+        if i not in label:
+            near = min((j for j in label), key=lambda j: min(abs(pieces[j][0] - p[1]), abs(p[0] - pieces[j][1])))
+            label[i] = label[near]
+    return [(p[0], p[1], label[i]) for i, p in enumerate(pieces)]
 
 
 def assign_speakers(words: list[dict], segments: list[tuple[float, float, int]]) -> int:
