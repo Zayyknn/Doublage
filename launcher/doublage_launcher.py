@@ -121,6 +121,12 @@ class Engine:
             fresh = install_files(self.source, self.root)
             if fresh:
                 self.events.put(("log", f"Installé dans {self.root}"))
+                if not WINDOWS and server_ready():  # un moteur de l'ancienne version tourne encore : on le remplace
+                    subprocess.run(f"lsof -ti tcp:{PORT} -sTCP:LISTEN | xargs kill", shell=True, capture_output=True)
+                    for _ in range(20):
+                        if not server_ready():
+                            break
+                        time.sleep(0.5)
             if not self.install_only and server_ready():  # déjà lancé (deuxième clic sur l'icône)
                 self.events.put(("ready", None))
                 return
@@ -360,7 +366,9 @@ def run_webview():
                 state["ready"] = True
                 js("setReady")
                 time.sleep(0.6)
-                window.load_url(URL)
+                version_file = home() / "VERSION"
+                version = version_file.read_text(encoding="utf-8").strip() if version_file.exists() else str(int(time.time()))
+                window.load_url(f"{URL}/?v={version}")  # adresse nouvelle à chaque version : la fenêtre ne ressort pas l'ancienne page
 
     def on_closing():
         engine.stop()

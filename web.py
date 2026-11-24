@@ -22,7 +22,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from fastapi import Body, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 ROOT = Path(__file__).resolve().parent
@@ -577,6 +577,27 @@ studio.clear_output = _clear_output
 app.include_router(studio.router)
 
 # ------------------------------------------------------------------ interface
+
+# La fenêtre de l'appli Mac garde les pages en cache : chaque version porte son numéro dans les adresses
+# des scripts et des styles, et rien n'est servi sans revalidation.
+VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip() if (ROOT / "VERSION").exists() else str(int(time.time()))
+
+
+@app.middleware("http")
+async def no_stale_pages(request: Request, call_next):
+    response = await call_next(request)
+    if not request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+@app.get("/")
+@app.get("/index.html")
+def index_page():
+    html = (WEB / "index.html").read_text(encoding="utf-8")
+    html = re.sub(r'((?:src|href)="/[\w.-]+\.(?:js|css))"', rf'\1?v={VERSION}"', html)
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+
 
 app.mount("/", StaticFiles(directory=WEB, html=True), name="web")
 
