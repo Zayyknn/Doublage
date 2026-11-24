@@ -24,7 +24,7 @@
   const url = (name) => `/api/studio/${encodeURIComponent(proj.id)}/file/${name.split("/").map(encodeURIComponent).join("/")}`;
   const speaker = (id) => proj.speakers.find((s) => s.id === id) || proj.speakers[0];
   const latency = () => Number($("#st-lat").value) / 1000;
-  const PALETTE = ["#2f62e8", "#e0193f", "#12a058", "#ee7a00", "#9a2fd4", "#0098ad", "#d01d88", "#6a8a00"];
+  const PALETTE = ["#3fa9ff", "#ff7a35", "#3ddc84", "#ffd23f", "#c77dff", "#2ee6d6", "#ff5fa2", "#a3e635"];
   let portraits = new Map();    // personne -> image de la vidéo où elle parle
 
   // ------------------------------------------------------------ calculs (les mêmes que côté serveur)
@@ -64,7 +64,18 @@
     });
     return ranges;
   }
-  function refresh() { parts = keptParts(proj.clips); lines = buildLines(proj.words); keep = keepRanges(); }
+  let wordRow = [];
+  function placeLines() {       // deux lignes : chaque réplique va sur la ligne de son personnage si elle est libre, sinon sur l'autre
+    const ends = [-1e9, -1e9], last = new Map();
+    wordRow = new Array(proj.words.length).fill(0);
+    for (const l of lines) {
+      const pref = last.has(l.sp) ? last.get(l.sp) : (ends[0] <= ends[1] ? 0 : 1);
+      const r = ends[pref] <= l.s - 0.15 || ends[1 - pref] > l.s - 0.15 ? pref : 1 - pref;
+      l.row = r; ends[r] = Math.max(ends[r], l.e); last.set(l.sp, r);
+      l.words.forEach((k) => (wordRow[k] = r));
+    }
+  }
+  function refresh() { parts = keptParts(proj.clips); lines = buildLines(proj.words); keep = keepRanges(); placeLines(); }
 
   // ------------------------------------------------------------ accueil
   D.LANGS.forEach(([c, n]) => $("#st-lang").insertAdjacentHTML("beforeend", `<option value="${c}">${n}</option>`));
@@ -193,15 +204,16 @@
   // ------------------------------------------------------------ bande rythmo
   let W = 0, H = 0, DPR = 1;
   const tv = () => document.fullscreenElement === $("#st-tv");
+  const ROWS = () => (proj && proj.speakers.length > 1 ? 2 : 1);
   function laneH() {
-    const n = proj ? proj.speakers.length : 1;
-    const base = n <= 2 ? 62 : n <= 4 ? 50 : 38;
-    return tv() ? Math.round(base * Math.max(1.4, window.innerHeight / 560)) : base;
+    const base = W && W < 600 ? 54 : 74;
+    return tv() ? Math.round(base * Math.max(1.4, window.innerHeight / 640)) : base;
   }
   function resize() {
     if (!proj) return;
     DPR = window.devicePixelRatio || 1;
-    band.style.height = (proj.speakers.length * laneH()) + "px";
+    W = band.clientWidth;
+    band.style.height = (ROWS() * laneH()) + "px";
     W = band.clientWidth; H = band.clientHeight;
     band.width = W * DPR; band.height = H * DPR;
     document.documentElement.style.setProperty("--band-h", H + "px");
@@ -229,66 +241,65 @@
     ctx.clearRect(0, 0, W, H);
     const t = clock();
     const lh = laneH();
-    const pps = lh * (W < 600 ? 4.2 : 5.2);    // pixels par seconde : assez vite pour que les mots tiennent sans se tasser
-    const bar = Math.round(W * 0.2);
+    const pps = lh * (W < 600 ? 3.6 : 4.4);    // pixels par seconde : assez vite pour que les mots tiennent sans se tasser
+    const bar = Math.round(W * 0.33);
     const focus = mode === "record" || mode === "countdown";
-    const row = new Map(proj.speakers.map((s, i) => [s.id, i]));
-    const textY = (i) => i * lh + lh * 0.62;
+    const fs = Math.round(lh * 0.5);
+    const textY = (r) => r * lh + lh * 0.54;
 
-    // couloirs clairs, comme une bande rythmo de studio
-    proj.speakers.forEach((s, i) => {
-      ctx.fillStyle = i % 2 ? "#e2e5ea" : "#f3f4f7";
-      ctx.fillRect(0, i * lh, W, lh);
-      if (s.id === who && focus) { ctx.fillStyle = s.color; ctx.globalAlpha = 0.07; ctx.fillRect(0, i * lh, W, lh); ctx.globalAlpha = 1; }
-    });
-    // ce qui est déjà enregistré : un trait en bas du couloir
+    // deux lignes sombres
+    for (let r = 0; r < ROWS(); r++) { ctx.fillStyle = r ? "#2c2f36" : "#32353d"; ctx.fillRect(0, r * lh, W, lh); }
+    if (ROWS() > 1) { ctx.fillStyle = "#1d1f24"; ctx.fillRect(0, lh - 1, W, 2); }
+    // ce qui est déjà enregistré : un trait sous les répliques concernées
     for (const p of parts) {
-      const x0 = Math.max(0, bar + (p.a - t) * pps), x1 = Math.min(W, bar + (p.b - t) * pps);
-      if (x1 <= x0) continue;
-      ctx.fillStyle = speaker(p.clip.sp).color;
-      ctx.globalAlpha = 0.6; ctx.fillRect(x0, (row.get(p.clip.sp) ?? 0) * lh + lh - 4, x1 - x0, 3); ctx.globalAlpha = 1;
+      for (const l of lines) {
+        if (l.sp !== p.clip.sp || l.e <= p.a || l.s >= p.b) continue;
+        const x0 = Math.max(0, bar + (Math.max(p.a, l.s) - t) * pps), x1 = Math.min(W, bar + (Math.min(p.b, l.e) - t) * pps);
+        if (x1 <= x0) continue;
+        ctx.fillStyle = speaker(p.clip.sp).color; ctx.globalAlpha = 0.7;
+        ctx.fillRect(x0, l.row * lh + lh - 5, x1 - x0, 3); ctx.globalAlpha = 1;
+      }
     }
-    // nom du personnage devant chaque réplique
-    const tagSize = Math.max(10, Math.round(lh * 0.2));
-    ctx.font = `700 ${tagSize}px ${getComputedStyle(document.body).fontFamily}`;
+    // étiquette du personnage juste avant chaque réplique
+    const tagSize = Math.max(10, Math.round(lh * 0.19));
     ctx.textBaseline = "middle";
     for (const l of lines) {
       const x = bar + (l.s - t) * pps;
-      if (x > W + 10) break;
+      if (x > W + 200) break;
       if (bar + (l.e - t) * pps < -10) continue;
-      const s = speaker(l.sp), i = row.get(l.sp) ?? 0;
-      const label = s.name.length > 18 ? s.name.slice(0, 17) + "…" : s.name;
+      const s = speaker(l.sp);
+      ctx.font = `800 ${tagSize}px ${getComputedStyle(document.body).fontFamily}`;
+      const label = (s.name.length > 16 ? s.name.slice(0, 15) + "…" : s.name).toUpperCase();
       const w = ctx.measureText(label).width + tagSize;
-      const y = i * lh + lh * 0.06;
-      ctx.globalAlpha = focus && l.sp !== who ? 0.4 : 1;
-      ctx.fillStyle = s.color; roundRect(ctx, x, y, w, tagSize * 1.45, 3); ctx.fill();
-      ctx.fillStyle = "#fff"; ctx.fillText(label, x + tagSize / 2, y + tagSize * 0.75);
+      const h = tagSize * 1.7, gap = tagSize * 0.6;
+      ctx.globalAlpha = (focus && l.sp !== who ? 0.4 : 1) * (bar + (l.e - t) * pps < bar ? 0.45 : 1);
+      ctx.fillStyle = s.color; roundRect(ctx, x - w - gap, textY(l.row) - h / 2, w, h, 3); ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,.85)"; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = "#fff"; ctx.fillText(label, x - w - gap + tagSize / 2, textY(l.row) + 1);
       ctx.globalAlpha = 1;
     }
     // les mots : chacun couvre exactement sa durée ; s'il est tenu longtemps, un trait le prolonge
-    const fs = Math.round(lh * 0.46);
-    ctx.font = `800 ${fs}px "Arial Narrow", "Roboto Condensed", Arial, sans-serif`;
-    ctx.textBaseline = "middle";
-    for (const w of proj.words) {
+    ctx.font = `700 ${fs}px "Arial Narrow", "Roboto Condensed", "Helvetica Neue", Arial, sans-serif`;
+    proj.words.forEach((w, k) => {
       const x = bar + (w.s - t) * pps;
-      if (x > W + 10) break;
+      if (x > W + 10) return;
       const width = Math.max((w.e - w.s) * pps, 4);
-      if (x + width + 20 < -10) continue;
+      if (x + width + 20 < -10) return;
       const s = speaker(w.sp);
-      const y = textY(row.get(w.sp) ?? 0);
+      const y = textY(wordRow[k] || 0);
       const natural = ctx.measureText(w.w).width || 1;
-      const scale = Math.max(0.6, Math.min((width - fs * 0.22) / natural, 1.5));
+      const scale = Math.max(0.55, Math.min((width - fs * 0.25) / natural, 1.3));
       const textEnd = x + natural * scale, end = x + width;
-      const past = end < bar;
-      ctx.globalAlpha = (focus && w.sp !== who ? 0.35 : 1) * (past ? 0.4 : 1);
+      ctx.globalAlpha = (focus && w.sp !== who ? 0.35 : 1) * (end < bar ? 0.45 : 1);
       ctx.fillStyle = s.color;
       ctx.save(); ctx.translate(x, y); ctx.scale(scale, 1); ctx.fillText(w.w, 0, 1); ctx.restore();
-      if (end - textEnd > fs * 1.2) ctx.fillRect(textEnd + 2, y + fs * 0.38, end - textEnd - 2, Math.max(2, fs * 0.08));
+      if (end - textEnd > fs * 1.2) ctx.fillRect(textEnd + 2, y + fs * 0.36, end - textEnd - 2, Math.max(2, fs * 0.07));
       ctx.globalAlpha = 1;
-    }
+    });
     // trait de synchro
-    ctx.fillStyle = "#e3132b";
-    ctx.fillRect(bar - 1, 0, 2.5, H);
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(bar - 1, 0, 2, H);
+    markActiveLine(t);
 
     $("#st-time").textContent = fmt(t);
     $("#st-dur").textContent = fmt(video.duration || proj.duration);
@@ -601,20 +612,44 @@
   function renderLines() {
     const options = proj.speakers.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join("");
     $("#st-lines").innerHTML = lines.map((l, i) => `
-      <div class="line"><span class="t">${fmt(l.s)}</span>
+      <div class="line" data-line="${i}"><div class="line-head">
         <select data-i="${i}" style="--c:${speaker(l.sp).color}">${options}</select>
-        <input type="text" data-i="${i}" value="${esc(l.words.map((k) => proj.words[k].w).join(" "))}"></div>`).join("") ||
+        <button class="t" data-seek="${i}" title="Aller à cette réplique">${fmt(l.s)}</button></div>
+        <textarea data-i="${i}" rows="1" spellcheck="true">${esc(l.words.map((k) => proj.words[k].w).join(" "))}</textarea></div>`).join("") ||
       `<p class="hint">Aucune parole détectée dans cette vidéo.</p>`;
+    const grow = (el) => { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; };
     $("#st-lines").querySelectorAll("select").forEach((el) => {
       el.value = lines[el.dataset.i].sp;
       el.addEventListener("change", () => el.style.setProperty("--c", speaker(Number(el.value)).color));
     });
+    $("#st-lines").querySelectorAll("textarea").forEach((el) => {
+      requestAnimationFrame(() => grow(el));
+      el.addEventListener("input", () => grow(el));
+      el.addEventListener("focus", () => { if (mode === "idle") video.currentTime = Math.max(0, lines[el.dataset.i].s - 0.8); });
+    });
+    $("#st-lines").querySelectorAll("[data-seek]").forEach((b) => (b.onclick = () => {
+      if (mode === "record" || mode === "countdown") return;
+      video.currentTime = Math.max(0, lines[b.dataset.seek].s - 0.8);
+    }));
+    activeLine = -1;
+  }
+  let activeLine = -1;
+  function markActiveLine(t) {  // la réplique en cours est surlignée dans le panneau Texte
+    const i = lines.findIndex((l) => t >= l.s - 0.3 && t < l.e + 0.3);
+    if (i === activeLine) return;
+    const box = $("#st-lines");
+    box.querySelector(".line.now")?.classList.remove("now");
+    activeLine = i;
+    const el = i >= 0 && box.querySelector(`[data-line="${i}"]`);
+    if (!el) return;
+    el.classList.add("now");
+    if (!box.contains(document.activeElement) && mode !== "idle") box.scrollTo({ top: el.offsetTop - box.offsetTop - 60, behavior: "smooth" });
   }
   $("#st-lines-save").onclick = async () => {
     const words = [];
     lines.forEach((l, i) => {
       const sp = Number($(`#st-lines select[data-i="${i}"]`).value);
-      const text = $(`#st-lines input[data-i="${i}"]`).value.trim().split(/\s+/).filter(Boolean);
+      const text = $(`#st-lines textarea[data-i="${i}"]`).value.trim().split(/\s+/).filter(Boolean);
       const old = l.words.map((k) => proj.words[k]);
       if (text.length === old.length) text.forEach((w, k) => words.push({ ...old[k], w, sp }));
       else {                               // nombre de mots changé : répartis sur la durée de la réplique

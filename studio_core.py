@@ -13,7 +13,7 @@ MODELS = ROOT / "_model_cache" / "diarization"
 RELEASES = "https://github.com/k2-fsa/sherpa-onnx/releases/download/"
 SEGMENTATION_URL = RELEASES + "speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2"
 EMBEDDING_URL = RELEASES + "speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
-COLORS = ["#2f62e8", "#e0193f", "#12a058", "#ee7a00", "#9a2fd4", "#0098ad", "#d01d88", "#6a8a00"]
+COLORS = ["#3fa9ff", "#ff7a35", "#3ddc84", "#ffd23f", "#c77dff", "#2ee6d6", "#ff5fa2", "#a3e635"]
 
 
 # ------------------------------------------------------------------ outils
