@@ -24,6 +24,8 @@
   const url = (name) => `/api/studio/${encodeURIComponent(proj.id)}/file/${name.split("/").map(encodeURIComponent).join("/")}`;
   const speaker = (id) => proj.speakers.find((s) => s.id === id) || proj.speakers[0];
   const latency = () => Number($("#st-lat").value) / 1000;
+  const PALETTE = ["#2f62e8", "#e0193f", "#12a058", "#ee7a00", "#9a2fd4", "#0098ad", "#d01d88", "#6a8a00"];
+  let portraits = new Map();    // personne -> image de la vidéo où elle parle
 
   // ------------------------------------------------------------ calculs (les mêmes que côté serveur)
   function keptParts(clips) {   // une prise récente remplace l'ancienne de la même personne là où elles se chevauchent
@@ -153,7 +155,9 @@
     try { next = await D.api(`/api/studio/${encodeURIComponent(id)}`); } catch (e) { return D.toast(e.message); }
     if (proj) stopAll();
     proj = next;
+    proj.speakers.forEach((s) => (s.color = PALETTE[s.id % PALETTE.length]));
     pool.forEach((a) => a.pause()); pool.clear();
+    portraits = new Map(); grabPortraits(proj);
     $("#st-home").classList.add("hidden");
     $("#st-editor").classList.remove("hidden");
     $("#st-title").textContent = proj.title;
@@ -188,15 +192,23 @@
 
   // ------------------------------------------------------------ bande rythmo
   let W = 0, H = 0, DPR = 1;
-  function laneH() { const n = proj ? proj.speakers.length : 1; return n <= 2 ? 50 : n <= 4 ? 40 : 30; }
+  const tv = () => document.fullscreenElement === $("#st-tv");
+  function laneH() {
+    const n = proj ? proj.speakers.length : 1;
+    const base = n <= 2 ? 62 : n <= 4 ? 50 : 38;
+    return tv() ? Math.round(base * Math.max(1.4, window.innerHeight / 560)) : base;
+  }
   function resize() {
     if (!proj) return;
     DPR = window.devicePixelRatio || 1;
-    band.style.height = (proj.speakers.length * laneH() + 12) + "px";
+    band.style.height = (proj.speakers.length * laneH()) + "px";
     W = band.clientWidth; H = band.clientHeight;
     band.width = W * DPR; band.height = H * DPR;
+    document.documentElement.style.setProperty("--band-h", H + "px");
   }
   window.addEventListener("resize", resize);
+  document.addEventListener("fullscreenchange", () => setTimeout(resize, 50));
+  $("#st-tv-go").onclick = () => $("#st-tv").requestFullscreen().catch(() => D.toast("Plein écran refusé par le navigateur"));
 
   function clock() {
     if (mode === "countdown") return recFrom + Math.min(0, (performance.now() - countdownEnd) / 1000);
@@ -216,63 +228,67 @@
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     ctx.clearRect(0, 0, W, H);
     const t = clock();
-    const pps = W < 600 ? 170 : 220;            // pixels par seconde
-    const bar = Math.round(W * 0.24);
     const lh = laneH();
+    const pps = lh * (W < 600 ? 4.2 : 5.2);    // pixels par seconde : assez vite pour que les mots tiennent sans se tasser
+    const bar = Math.round(W * 0.2);
     const focus = mode === "record" || mode === "countdown";
     const row = new Map(proj.speakers.map((s, i) => [s.id, i]));
+    const textY = (i) => i * lh + lh * 0.62;
 
-    // couloirs, un par personne
+    // couloirs clairs, comme une bande rythmo de studio
     proj.speakers.forEach((s, i) => {
-      ctx.globalAlpha = s.id === who ? 0.16 : 0.06;
-      ctx.fillStyle = s.color;
-      ctx.fillRect(0, 6 + i * lh + 2, W, lh - 4);
-      ctx.globalAlpha = 1;
+      ctx.fillStyle = i % 2 ? "#e2e5ea" : "#f3f4f7";
+      ctx.fillRect(0, i * lh, W, lh);
+      if (s.id === who && focus) { ctx.fillStyle = s.color; ctx.globalAlpha = 0.07; ctx.fillRect(0, i * lh, W, lh); ctx.globalAlpha = 1; }
     });
-    // ce qui est déjà enregistré : un trait sous la bande
+    // ce qui est déjà enregistré : un trait en bas du couloir
     for (const p of parts) {
       const x0 = Math.max(0, bar + (p.a - t) * pps), x1 = Math.min(W, bar + (p.b - t) * pps);
       if (x1 <= x0) continue;
       ctx.fillStyle = speaker(p.clip.sp).color;
-      ctx.globalAlpha = 0.9; ctx.fillRect(x0, 6 + (row.get(p.clip.sp) ?? 0) * lh + lh - 5, x1 - x0, 3); ctx.globalAlpha = 1;
+      ctx.globalAlpha = 0.6; ctx.fillRect(x0, (row.get(p.clip.sp) ?? 0) * lh + lh - 4, x1 - x0, 3); ctx.globalAlpha = 1;
     }
-    // les mots
-    ctx.font = `italic 600 ${Math.round(lh * 0.56)}px Georgia, 'Times New Roman', serif`;
+    // nom du personnage devant chaque réplique
+    const tagSize = Math.max(10, Math.round(lh * 0.2));
+    ctx.font = `700 ${tagSize}px ${getComputedStyle(document.body).fontFamily}`;
+    ctx.textBaseline = "middle";
+    for (const l of lines) {
+      const x = bar + (l.s - t) * pps;
+      if (x > W + 10) break;
+      if (bar + (l.e - t) * pps < -10) continue;
+      const s = speaker(l.sp), i = row.get(l.sp) ?? 0;
+      const label = s.name.length > 18 ? s.name.slice(0, 17) + "…" : s.name;
+      const w = ctx.measureText(label).width + tagSize;
+      const y = i * lh + lh * 0.06;
+      ctx.globalAlpha = focus && l.sp !== who ? 0.4 : 1;
+      ctx.fillStyle = s.color; roundRect(ctx, x, y, w, tagSize * 1.45, 3); ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.fillText(label, x + tagSize / 2, y + tagSize * 0.75);
+      ctx.globalAlpha = 1;
+    }
+    // les mots : chacun couvre exactement sa durée ; s'il est tenu longtemps, un trait le prolonge
+    const fs = Math.round(lh * 0.46);
+    ctx.font = `800 ${fs}px "Arial Narrow", "Roboto Condensed", Arial, sans-serif`;
     ctx.textBaseline = "middle";
     for (const w of proj.words) {
       const x = bar + (w.s - t) * pps;
       if (x > W + 10) break;
       const width = Math.max((w.e - w.s) * pps, 4);
-      if (x + width * 3 < -10) continue;
+      if (x + width + 20 < -10) continue;
       const s = speaker(w.sp);
-      const y = 6 + (row.get(w.sp) ?? 0) * lh + lh / 2;
+      const y = textY(row.get(w.sp) ?? 0);
       const natural = ctx.measureText(w.w).width || 1;
-      const scale = Math.max(0.42, Math.min(width / natural, 3));  // le mot couvre exactement sa durée
-      const end = x + natural * scale;
-      const dim = focus && w.sp !== who ? 0.35 : 1;
-      const drawWord = (fill, alpha) => {
-        ctx.save(); ctx.globalAlpha = alpha * dim; ctx.translate(x, y); ctx.scale(scale, 1);
-        ctx.fillStyle = fill; ctx.fillText(w.w, 0, 1); ctx.restore();
-      };
-      drawWord(end < bar ? s.color : "#fff", end < bar ? 0.4 : 0.92);
-      if (x < bar && end >= bar) {     // le mot en train d'être dit se colore
-        ctx.save(); ctx.beginPath(); ctx.rect(x - 2, 0, bar - x + 2, H); ctx.clip();
-        drawWord(s.color, 1); ctx.restore();
-      }
+      const scale = Math.max(0.6, Math.min((width - fs * 0.22) / natural, 1.5));
+      const textEnd = x + natural * scale, end = x + width;
+      const past = end < bar;
+      ctx.globalAlpha = (focus && w.sp !== who ? 0.35 : 1) * (past ? 0.4 : 1);
+      ctx.fillStyle = s.color;
+      ctx.save(); ctx.translate(x, y); ctx.scale(scale, 1); ctx.fillText(w.w, 0, 1); ctx.restore();
+      if (end - textEnd > fs * 1.2) ctx.fillRect(textEnd + 2, y + fs * 0.38, end - textEnd - 2, Math.max(2, fs * 0.08));
+      ctx.globalAlpha = 1;
     }
-    // noms au bord gauche
-    ctx.font = "600 11px " + getComputedStyle(document.body).fontFamily;
-    ctx.textBaseline = "middle";
-    proj.speakers.forEach((s, i) => {
-      const y = 6 + i * lh + 4;
-      const label = s.name.length > 14 ? s.name.slice(0, 13) + "…" : s.name;
-      const w = ctx.measureText(label).width + 12;
-      ctx.fillStyle = "rgba(11,12,18,.85)"; roundRect(ctx, 6, y, w, 16, 8); ctx.fill();
-      ctx.fillStyle = s.color; ctx.fillText(label, 12, y + 8.5);
-    });
     // trait de synchro
-    ctx.fillStyle = "#ff3b4f"; ctx.shadowColor = "#ff3b4f"; ctx.shadowBlur = 12;
-    ctx.fillRect(bar - 1.5, 3, 3, H - 6); ctx.shadowBlur = 0;
+    ctx.fillStyle = "#e3132b";
+    ctx.fillRect(bar - 1, 0, 2.5, H);
 
     $("#st-time").textContent = fmt(t);
     $("#st-dur").textContent = fmt(video.duration || proj.duration);
@@ -323,6 +339,7 @@
 
   function stopAll() {
     video.pause();
+    if (introDone) introDone(false);
     if (recorder && recorder.state !== "inactive") { recTo = video.currentTime; recorder.stop(); }
     $("#st-cd").classList.add("hidden");
     $("#st-rec").classList.add("hidden");
@@ -349,8 +366,48 @@
     await swapSource(kind === "orig" ? "original.mp4" : "ambiance.mp4");
     if (video.duration && video.currentTime >= video.duration - 0.1) video.currentTime = 0;
     mode = kind; buttons();
+    if (video.currentTime < 0.3 && $("#st-intro-auto").checked && (!(await intro()) || mode !== kind)) return;
     try { await video.play(); } catch { stopAll(); }
   }
+
+  // ------------------------------------------------------------ présentation : logo puis les personnages
+  function grabPortraits(p) {   // pour chaque personne, une image prise au milieu de sa plus longue réplique
+    const longest = new Map();
+    buildLines(p.words).forEach((l) => { const b = longest.get(l.sp); if (!b || l.e - l.s > b.e - b.s) longest.set(l.sp, l); });
+    const v = document.createElement("video");
+    v.muted = true; v.preload = "auto"; v.src = url("original.mp4");
+    const todo = [...longest.entries()];
+    const next = () => {
+      if (proj !== p || !todo.length) { v.removeAttribute("src"); v.load(); return; }
+      const [sp, l] = todo.shift();
+      v.addEventListener("seeked", () => {
+        const c = document.createElement("canvas");
+        c.width = 480; c.height = Math.round(480 * (v.videoHeight / v.videoWidth || 9 / 16));
+        c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+        try { portraits.set(sp, c.toDataURL("image/jpeg", 0.85)); } catch {}
+        next();
+      }, { once: true });
+      v.currentTime = (l.s + l.e) / 2;
+    };
+    v.addEventListener("loadeddata", next, { once: true });
+  }
+  let introDone = null;
+  function intro() {            // résout true quand la présentation est finie, false si on l'a arrêtée
+    const box = $("#st-intro"), logo = box.querySelector(".intro-logo"), cast = box.querySelector(".intro-cast");
+    cast.querySelector("h2").textContent = proj.title.replace(/\s+\d{1,2}-\d{1,2}\s+\d{1,2}h\d{2}$/, "");
+    cast.querySelector(".cast").innerHTML = proj.speakers.map((s, i) =>
+      `<div style="--c:${s.color};--i:${i}">${portraits.has(s.id) ? `<img src="${portraits.get(s.id)}" alt="">` : ""}<b>${esc(s.name)}</b></div>`).join("");
+    box.classList.remove("hidden"); logo.classList.remove("hidden"); cast.classList.add("hidden");
+    return new Promise((ok) => {
+      const timers = [];
+      const finish = (result) => { timers.forEach(clearTimeout); box.classList.add("hidden"); box.onclick = null; introDone = null; ok(result); };
+      introDone = finish;
+      timers.push(setTimeout(() => { logo.classList.add("hidden"); cast.classList.remove("hidden"); }, 2000));
+      timers.push(setTimeout(() => finish(true), 2000 + 1500 + proj.speakers.length * 700));
+      box.onclick = () => finish(true);
+    });
+  }
+  $("#st-intro-go").onclick = async () => { stopAll(); mode = "intro"; buttons(); await intro(); if (mode === "intro") { mode = "idle"; buttons(); } };
   $("#st-orig").onclick = () => play("orig");
   $("#st-play").onclick = () => play("play");
   $("#st-stop").onclick = () => stopAll();
@@ -388,6 +445,10 @@
     }
     await swapSource("ambiance.mp4");
     if (video.duration && video.currentTime >= video.duration - 0.5) video.currentTime = 0;
+    if (video.currentTime < 0.3 && $("#st-intro-auto").checked) {
+      mode = "intro"; buttons();
+      if (!(await intro()) || mode !== "intro") return;
+    }
     recFrom = video.currentTime;
     chunks = []; playStart = 0;
     const type = mimeType();
@@ -402,8 +463,12 @@
     $("#st-cd").classList.remove("hidden");
     const count = () => {
       if (mode !== "countdown") return;
-      const left = Math.ceil((countdownEnd - performance.now()) / 1000);
-      if (left > 0) { $("#st-cd").textContent = left; requestAnimationFrame(count); return; }
+      const ms = countdownEnd - performance.now();
+      if (ms > 0) {
+        $("#st-cd b").textContent = Math.ceil(ms / 1000);
+        $("#st-cd .cd-bar i").style.width = (ms / 30) + "%";
+        requestAnimationFrame(count); return;
+      }
       $("#st-cd").classList.add("hidden");
       $("#st-rec").classList.remove("hidden");
       mode = "record";
@@ -461,6 +526,8 @@
       st.classList.add("hidden");
       if (p.job && p.job.error) D.toast(p.job.error, 6000);
       Object.assign(proj, { words: p.words, speakers: p.speakers, speakers_error: p.speakers_error });
+      proj.speakers.forEach((s) => (s.color = PALETTE[s.id % PALETTE.length]));
+      portraits = new Map(); grabPortraits(proj);
       if (!proj.speakers.some((s) => s.id === who)) who = proj.speakers[0].id;
       $("#st-sp-warn").classList.toggle("hidden", !proj.speakers_error);
       $("#st-sp-warn").textContent = proj.speakers_error || "";
