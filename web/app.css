@@ -269,7 +269,7 @@ nav.tabs button.on { color: var(--text); background: var(--glass-strong); }
 .rec-dot { position: absolute; top: 10px; left: 10px; display: flex; align-items: center; gap: 6px; font: 700 12px var(--font); letter-spacing: .08em;
   color: #fff; padding: 5px 9px; border-radius: 99px; background: rgba(0,0,0,.5); }
 .rec-dot i { width: 9px; height: 9px; border-radius: 50%; background: #ff3b4f; box-shadow: 0 0 10px #ff3b4f; animation: pulse 1s infinite; }
-.band { display: block; width: 100%; height: 96px; margin-top: 10px; border-radius: 14px; background: #2c2f36; border: 1px solid var(--line); }
+.band { display: block; width: 100%; height: 96px; margin-top: 10px; border-radius: 14px; background: #2c2f36; border: 1px solid var(--line); touch-action: none; user-select: none; }
 .seek { display: flex; align-items: center; gap: 10px; margin: 10px 2px 4px; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
 .seek input { flex: 1; }
 input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 99px; background: rgba(255,255,255,.12); outline: none; padding: 0; border: 0; }

@@ -280,16 +280,19 @@
     }
     // les mots : chacun couvre exactement sa durée ; s'il est tenu longtemps, un trait le prolonge
     ctx.font = `700 ${fs}px "Arial Narrow", "Roboto Condensed", "Helvetica Neue", Arial, sans-serif`;
+    boxes = [];
     proj.words.forEach((w, k) => {
       const x = bar + (w.s - t) * pps;
       if (x > W + 10) return;
       const width = Math.max((w.e - w.s) * pps, 4);
       if (x + width + 20 < -10) return;
       const s = speaker(w.sp);
-      const y = textY(wordRow[k] || 0);
+      const dragged = drag && drag.moved && drag.k === k;
+      const y = dragged ? Math.max(fs / 2, Math.min(H - fs / 2, drag.y)) : textY(wordRow[k] || 0);
       const natural = ctx.measureText(w.w).width || 1;
       const scale = Math.max(0.55, Math.min((width - fs * 0.25) / natural, 1.3));
       const textEnd = x + natural * scale, end = x + width;
+      boxes.push({ k, x0: x, x1: Math.max(textEnd, x + width * 0.9), row: wordRow[k] || 0 });
       ctx.globalAlpha = (focus && w.sp !== who ? 0.35 : 1) * (end < bar ? 0.45 : 1);
       ctx.fillStyle = s.color;
       ctx.save(); ctx.translate(x, y); ctx.scale(scale, 1); ctx.fillText(w.w, 0, 1); ctx.restore();
@@ -620,11 +623,21 @@
     const grow = (el) => { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; };
     $("#st-lines").querySelectorAll("select").forEach((el) => {
       el.value = lines[el.dataset.i].sp;
-      el.addEventListener("change", () => el.style.setProperty("--c", speaker(Number(el.value)).color));
+      el.addEventListener("change", () => {      // le personnage change tout de suite, sur la bande aussi
+        const sp = Number(el.value);
+        lines[el.dataset.i].words.forEach((k) => (proj.words[k].sp = sp));
+        applyWords(proj.words, true);
+      });
     });
     $("#st-lines").querySelectorAll("textarea").forEach((el) => {
       requestAnimationFrame(() => grow(el));
-      el.addEventListener("input", () => grow(el));
+      let timer = null;
+      el.addEventListener("input", () => {        // le texte suit la frappe sur la bande
+        grow(el);
+        clearTimeout(timer);
+        timer = setTimeout(() => applyText(Number(el.dataset.i), el.value), 400);
+      });
+      el.addEventListener("blur", () => { clearTimeout(timer); applyText(Number(el.dataset.i), el.value, true); });
       el.addEventListener("focus", () => { if (mode === "idle") video.currentTime = Math.max(0, lines[el.dataset.i].s - 0.8); });
     });
     $("#st-lines").querySelectorAll("[data-seek]").forEach((b) => (b.onclick = () => {
@@ -645,23 +658,73 @@
     el.classList.add("now");
     if (!box.contains(document.activeElement) && mode !== "idle") box.scrollTo({ top: el.offsetTop - box.offsetTop - 60, behavior: "smooth" });
   }
-  $("#st-lines-save").onclick = async () => {
-    const words = [];
-    lines.forEach((l, i) => {
-      const sp = Number($(`#st-lines select[data-i="${i}"]`).value);
-      const text = $(`#st-lines textarea[data-i="${i}"]`).value.trim().split(/\s+/).filter(Boolean);
-      const old = l.words.map((k) => proj.words[k]);
-      if (text.length === old.length) text.forEach((w, k) => words.push({ ...old[k], w, sp }));
-      else {                               // nombre de mots changé : répartis sur la durée de la réplique
-        const step = (l.e - l.s) / Math.max(1, text.length);
-        text.forEach((w, k) => words.push({ w, s: l.s + k * step, e: l.s + (k + 1) * step - 0.02, sp }));
-      }
-    });
+  // ------------------------------------------------------------ modifications appliquées tout de suite
+  let saveTimer = null;
+  function applyWords(words, rerender) {
     proj.words = words;
-    await save({ words });
-    refresh(); renderLines(); renderPeople();
-    D.toast("Texte enregistré");
-  };
+    refresh();
+    if (rerender) renderLines();
+    renderPeople();
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => save({ words: proj.words }), 600);
+  }
+  function applyText(i, value, done) {
+    const l = lines[i];
+    if (!l) return;
+    const text = value.trim().split(/\s+/).filter(Boolean);
+    const old = l.words.map((k) => proj.words[k]);
+    if (text.length === old.length && text.every((w, k) => w === old[k].w)) { if (done) renderLines(); return; }
+    let fresh;
+    if (text.length === old.length) fresh = text.map((w, k) => ({ ...old[k], w }));
+    else {                                 // nombre de mots changé : répartis sur la durée de la réplique
+      const step = (l.e - l.s) / Math.max(1, text.length);
+      fresh = text.map((w, k) => ({ w, s: l.s + k * step, e: l.s + (k + 1) * step - 0.02, sp: l.sp }));
+    }
+    const first = l.words[0], last = l.words[l.words.length - 1];
+    const before = lines.length;
+    applyWords([...proj.words.slice(0, first), ...fresh, ...proj.words.slice(last + 1)], false);
+    if (done || lines.length !== before) renderLines();
+  }
+
+  // ------------------------------------------------------------ glisser un mot sur l'autre ligne de la bande
+  let boxes = [], drag = null;
+  function hit(e) {
+    const r = band.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    const row = Math.min(ROWS() - 1, Math.max(0, Math.floor(y / laneH())));
+    return { x, y, row, box: boxes.find((b) => b.row === row && x >= b.x0 - 3 && x <= b.x1 + 3) };
+  }
+  band.addEventListener("pointerdown", (e) => {
+    if (!proj || ROWS() < 2 || mode === "record" || mode === "countdown") return;
+    const h = hit(e);
+    if (!h.box) return;
+    drag = { k: h.box.k, from: h.box.row, dx: h.x - h.box.x0, y: h.y, row: h.box.row, moved: false };
+    band.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  band.addEventListener("pointermove", (e) => {
+    if (!drag) { band.style.cursor = proj && ROWS() > 1 && hit(e).box ? "grab" : ""; return; }
+    const h = hit(e);
+    drag.y = h.y; drag.row = h.row; drag.moved = true;
+    band.style.cursor = "grabbing";
+  });
+  band.addEventListener("pointerup", () => {
+    if (!drag) return;
+    const { k, from, row } = drag;
+    drag = null; band.style.cursor = "";
+    if (row === from) return;
+    // le mot va au personnage de la ligne visée : la réplique la plus proche dans le temps sur cette ligne
+    const w = proj.words[k];
+    let best = null, gap = 1e9;
+    for (const l of lines) {
+      if (l.row !== row || l.sp === w.sp) continue;
+      const g = Math.max(l.s - w.e, w.s - l.e, 0);
+      if (g < gap) { gap = g; best = l.sp; }
+    }
+    if (best === null) best = proj.speakers.find((s) => s.id !== w.sp).id;
+    proj.words[k] = { ...w, sp: best };
+    applyWords(proj.words, true);
+    D.toast(`« ${w.w} » → ${speaker(best).name}`);
+  });
   $("#st-delete").onclick = async () => {
     if (!confirm(`Supprimer « ${proj.title} », ses prises et ses vidéos ?`)) return;
     await D.api(`/api/studio/${encodeURIComponent(proj.id)}`, { method: "DELETE" });
