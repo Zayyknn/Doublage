@@ -15,6 +15,22 @@ permissions:
   contents: write
 
 jobs:
+  # La version est publiée tout de suite : le bouton « Mettre à jour » de l'appli n'a besoin que du code.
+  # Les installateurs (souvent en file d'attente chez GitHub pour le Mac) s'y ajoutent quand ils sont prêts.
+  code:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publier le code de la version
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: Studio Rythmo ${{ inputs.version }}
+          make_latest: true
+          body: |
+            Disponible dans l'appli : bouton **Mettre à jour** (pastille rouge sur Réglages).
+            Les installateurs Mac et Windows s'ajoutent ici quand leur construction est finie.
+
   windows:
     runs-on: windows-latest
     steps:
@@ -75,7 +91,7 @@ jobs:
           path: dist/StudioRythmo-Mac.dmg
 
   release:
-    needs: [windows, mac]
+    needs: [code, windows, mac]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
