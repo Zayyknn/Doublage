@@ -59,8 +59,8 @@
     const dubbed = new Set(proj.clips.map((c) => c.sp));
     const ranges = [];
     proj.words.filter((w) => !dubbed.has(w.sp)).forEach((w) => {
-      const s = Math.max(0, w.s - 0.12), e = w.e + 0.12, last = ranges[ranges.length - 1];
-      if (last && s - last[1] < 0.8) last[1] = Math.max(last[1], e); else ranges.push([s, e]);
+      const s = Math.max(0, w.s - 0.25), e = w.e + 0.3, last = ranges[ranges.length - 1];  // marges larges : pas de voix hachée
+      if (last && s - last[1] < 1.2) last[1] = Math.max(last[1], e); else ranges.push([s, e]);
     });
     return ranges;
   }
@@ -357,7 +357,9 @@
     // voix d'origine : guide pendant l'enregistrement, ou personnes non doublées à l'écoute
     let vol = 0;
     if (running && mode === "record" && $("#st-guide").checked) vol = 0.3;
-    if (running && mode === "play" && $("#st-keep").checked && keep.some(([a, b]) => t >= a && t < b)) vol = 1;
+    // Sans aucune prise, « Écouter » = l'ambiance seule : sinon la voix d'origine revenait par bouts, mot par mot
+    // (les « syllabes qui ressortent »), alors que le retrait des voix avait marché.
+    if (running && mode === "play" && proj.clips.length && $("#st-keep").checked && keep.some(([a, b]) => t >= a && t < b)) vol = 1;
     if (vol > 0) {
       vocals.volume = vol;
       if (Math.abs(vocals.currentTime - t) > 0.15) vocals.currentTime = t;
