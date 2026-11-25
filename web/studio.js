@@ -65,13 +65,13 @@
     return ranges;
   }
   let wordRow = [];
-  function placeLines() {       // deux lignes : chaque réplique va sur la ligne de son personnage si elle est libre, sinon sur l'autre
-    const ends = [-1e9, -1e9], last = new Map();
+  function placeLines() {       // deux lignes : chaque personnage a sa ligne attitrée (1 en haut, 2 en bas, 3 en haut…) ;
+    const ends = [-1e9, -1e9];  // elle ne change que si elle est occupée à ce moment-là. Modifier une réplique ne rebrasse plus la suite.
     wordRow = new Array(proj.words.length).fill(0);
     for (const l of lines) {
-      const pref = last.has(l.sp) ? last.get(l.sp) : (ends[0] <= ends[1] ? 0 : 1);
+      const pref = ROWS() > 1 ? l.sp % 2 : 0;
       const r = ends[pref] <= l.s - 0.15 || ends[1 - pref] > l.s - 0.15 ? pref : 1 - pref;
-      l.row = r; ends[r] = Math.max(ends[r], l.e); last.set(l.sp, r);
+      l.row = r; ends[r] = Math.max(ends[r], l.e);
       l.words.forEach((k) => (wordRow[k] = r));
     }
   }
@@ -278,6 +278,8 @@
     // étiquette du personnage juste avant chaque réplique
     const tagSize = Math.max(10, Math.round(lh * 0.19));
     ctx.textBaseline = "middle";
+    tagBoxes = [];
+    const dragY = (row) => drag && drag.moved ? Math.max(fs / 2, Math.min(H - fs / 2, drag.y)) : textY(row);
     for (const l of lines) {
       const x = bar + (l.s - t) * pps;
       if (x > W + 200) break;
@@ -287,10 +289,12 @@
       const label = (s.name.length > 16 ? s.name.slice(0, 15) + "…" : s.name).toUpperCase();
       const w = ctx.measureText(label).width + tagSize;
       const h = tagSize * 1.7, gap = tagSize * 0.6;
+      const y = drag && drag.moved && drag.line === l ? dragY(l.row) : textY(l.row);
+      tagBoxes.push({ line: l, x0: x - w - gap, x1: x, row: l.row });
       ctx.globalAlpha = (focus && l.sp !== who ? 0.4 : 1) * (bar + (l.e - t) * pps < bar ? 0.45 : 1);
-      ctx.fillStyle = s.color; roundRect(ctx, x - w - gap, textY(l.row) - h / 2, w, h, 3); ctx.fill();
+      ctx.fillStyle = s.color; roundRect(ctx, x - w - gap, y - h / 2, w, h, 3); ctx.fill();
       ctx.strokeStyle = "rgba(255,255,255,.85)"; ctx.lineWidth = 1.5; ctx.stroke();
-      ctx.fillStyle = "#fff"; ctx.fillText(label, x - w - gap + tagSize / 2, textY(l.row) + 1);
+      ctx.fillStyle = "#fff"; ctx.fillText(label, x - w - gap + tagSize / 2, y + 1);
       ctx.globalAlpha = 1;
     }
     // les mots : chacun couvre exactement sa durée ; s'il est tenu longtemps, un trait le prolonge
@@ -302,8 +306,8 @@
       const width = Math.max((w.e - w.s) * pps, 4);
       if (x + width + 20 < -10) return;
       const s = speaker(w.sp);
-      const dragged = drag && drag.moved && drag.k === k;
-      const y = dragged ? Math.max(fs / 2, Math.min(H - fs / 2, drag.y)) : textY(wordRow[k] || 0);
+      const dragged = drag && drag.moved && drag.set.has(k);
+      const y = dragged ? dragY(wordRow[k] || 0) : textY(wordRow[k] || 0);
       const natural = ctx.measureText(w.w).width || 1;
       const scale = Math.max(0.55, Math.min((width - fs * 0.25) / natural, 1.3));
       const textEnd = x + natural * scale, end = x + width;
@@ -743,43 +747,64 @@
   }
 
   // ------------------------------------------------------------ glisser un mot sur l'autre ligne de la bande
-  let boxes = [], drag = null;
+  let boxes = [], tagBoxes = [], drag = null;
+  const endsSentence = (w) => /[.?!…]\s*$/.test(w.w);
   function hit(e) {
     const r = band.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
     const row = Math.min(ROWS() - 1, Math.max(0, Math.floor(y / laneH())));
-    return { x, y, row, box: boxes.find((b) => b.row === row && x >= b.x0 - 3 && x <= b.x1 + 3) };
+    return { x, y, row, box: boxes.find((b) => b.row === row && x >= b.x0 - 3 && x <= b.x1 + 3),
+             tag: tagBoxes.find((b) => b.row === row && x >= b.x0 - 3 && x <= b.x1 + 3) };
+  }
+  // Ce qui part avec le mot attrapé : lui et la fin de sa phrase dans la réplique (« Aller » emmène « Aller, aller. »).
+  // L'étiquette du personnage emmène toute la réplique.
+  function dragSet(h) {
+    if (h.tag) return { line: h.tag.line, set: new Set(h.tag.line.words) };
+    const line = lines.find((l) => l.words.includes(h.box.k)), set = new Set();
+    for (const j of line.words.slice(line.words.indexOf(h.box.k))) {
+      set.add(j);
+      if (endsSentence(proj.words[j])) break;
+    }
+    return { line: null, set };
   }
   band.addEventListener("pointerdown", (e) => {
     if (!proj || ROWS() < 2 || mode === "record" || mode === "countdown") return;
     const h = hit(e);
-    if (!h.box) return;
-    drag = { k: h.box.k, from: h.box.row, dx: h.x - h.box.x0, y: h.y, row: h.box.row, moved: false };
+    if (!h.box && !h.tag) return;
+    const from = h.tag ? h.tag.row : h.box.row;
+    drag = { ...dragSet(h), from, y: h.y, row: from, moved: false };
     band.setPointerCapture(e.pointerId);
     e.preventDefault();
   });
   band.addEventListener("pointermove", (e) => {
-    if (!drag) { band.style.cursor = proj && ROWS() > 1 && hit(e).box ? "grab" : ""; return; }
+    if (!drag) { const h = proj && ROWS() > 1 ? hit(e) : {}; band.style.cursor = h.box || h.tag ? "grab" : ""; return; }
     const h = hit(e);
     drag.y = h.y; drag.row = h.row; drag.moved = true;
     band.style.cursor = "grabbing";
   });
   band.addEventListener("pointerup", () => {
     if (!drag) return;
-    const { k, from, row } = drag;
+    const { set, from, row } = drag;
     drag = null; band.style.cursor = "";
     if (row === from) return;
-    // le mot va au personnage de la ligne visée : la réplique la plus proche dans le temps sur cette ligne
-    const w = proj.words[k];
+    // Les mots vont au personnage de la ligne visée : celui qui y parle le plus près dans le temps,
+    // sinon celui dont c'est la ligne attitrée, sinon le premier autre personnage.
+    const ks = [...set].sort((a, b) => a - b), first = proj.words[ks[0]], lastW = proj.words[ks[ks.length - 1]];
+    const sp0 = first.sp;
     let best = null, gap = 1e9;
-    for (const l of lines) {
-      if (l.row !== row || l.sp === w.sp) continue;
-      const g = Math.max(l.s - w.e, w.s - l.e, 0);
-      if (g < gap) { gap = g; best = l.sp; }
+    for (const own of [true, false]) {          // d'abord les personnages dont c'est la ligne attitrée
+      for (const l of lines) {
+        if (l.row !== row || l.sp === sp0 || (own && l.sp % 2 !== row)) continue;
+        const g = Math.max(l.s - lastW.e, first.s - l.e, 0);
+        if (g < gap) { gap = g; best = l.sp; }
+      }
+      if (best !== null) break;
     }
-    if (best === null) best = proj.speakers.find((s) => s.id !== w.sp).id;
-    proj.words[k] = { ...w, sp: best };
+    if (best === null) best = (proj.speakers.find((s) => s.id !== sp0 && s.id % 2 === row) || proj.speakers.find((s) => s.id !== sp0) || {}).id;
+    if (best === undefined) return;
+    ks.forEach((k) => (proj.words[k] = { ...proj.words[k], sp: best }));
     applyWords(proj.words, true);
-    D.toast(`« ${w.w} » → ${speaker(best).name}`);
+    const text = ks.map((k) => proj.words[k].w).join(" ");
+    D.toast(`« ${text.length > 40 ? text.slice(0, 38) + "…" : text} » → ${speaker(best).name}`);
   });
   $("#st-delete").onclick = async () => {
     const b = $("#st-delete");
