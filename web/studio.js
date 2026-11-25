@@ -155,8 +155,22 @@
         <div class="thumb"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></div>
         <div class="meta"><b>${esc(p.title)}</b><small>${fmt(p.duration)} · ${p.speakers} personne${p.speakers > 1 ? "s" : ""} · ${p.clips} prise${p.clips > 1 ? "s" : ""}</small></div>
         <button class="btn small" data-open="${i}">Ouvrir</button>
+        <button class="btn small ghost danger" data-remove="${i}" title="Supprimer la vidéo, ses prises et ses vidéos terminées">Supprimer</button>
       </div>`).join("");
     $("#st-projects").querySelectorAll("[data-open]").forEach((b) => (b.onclick = () => open(list[b.dataset.open].id)));
+    // 1er clic : « Confirmer ? » pendant 4 s ; 2e clic : supprime (pas de boîte de dialogue, la fenêtre Mac les gère mal)
+    $("#st-projects").querySelectorAll("[data-remove]").forEach((b) => (b.onclick = async () => {
+      if (!b.classList.contains("armed")) {
+        b.classList.add("armed"); b.textContent = "Confirmer ?";
+        setTimeout(() => { b.classList.remove("armed"); b.textContent = "Supprimer"; }, 4000);
+        return;
+      }
+      const p = list[b.dataset.remove];
+      b.disabled = true;
+      try { await D.api(`/api/studio/${encodeURIComponent(p.id)}`, { method: "DELETE" }); D.toast(`« ${p.title} » supprimée`); }
+      catch (e) { D.toast(e.message); }
+      loadProjects();
+    }));
     return list;
   }
 
@@ -757,7 +771,13 @@
     D.toast(`« ${w.w} » → ${speaker(best).name}`);
   });
   $("#st-delete").onclick = async () => {
-    if (!confirm(`Supprimer « ${proj.title} », ses prises et ses vidéos ?`)) return;
+    const b = $("#st-delete");
+    if (!b.classList.contains("armed")) {  // pas de confirm() : la fenêtre de l'appli Mac ne l'affiche pas toujours
+      b.classList.add("armed"); b.textContent = "Cliquer encore pour supprimer";
+      setTimeout(() => { b.classList.remove("armed"); b.textContent = "Supprimer la vidéo"; }, 4000);
+      return;
+    }
+    b.classList.remove("armed"); b.textContent = "Supprimer la vidéo";
     await D.api(`/api/studio/${encodeURIComponent(proj.id)}`, { method: "DELETE" });
     $("#st-back").click();
   };

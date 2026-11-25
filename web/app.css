@@ -337,6 +337,7 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
 }
 
 .nav-brand { display: none; }
+.btn.danger.armed { background: var(--bad); color: #fff; border-color: var(--bad); }
 
 /* Grand écran (Mac, PC, télé) : menu sur le côté, contenu sur toute la largeur, cartes en colonnes */
 @media (min-width: 1000px) {
