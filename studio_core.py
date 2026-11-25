@@ -354,7 +354,7 @@ SAME_VOICE = 0.5       # ressemblance moyenne (cosinus) entre passages au-delà 
                        # mesuré sur des passages de 1 à 4 s : même voix 0,5-0,9, voix différentes 0,1-0,35
 MIN_SPEECH = 2.5       # en dessous, en secondes, ce n'est pas une personne de plus : on la rattache à la plus proche
 PIECE = 8.0            # longueur des morceaux analysés, en secondes (repli sans texte)
-SAME_SENTENCE = 0.3    # par phrase : même voix 0,43-0,9, voix différentes 0,1-0,17 (mesuré, 5e et 95e centiles)
+SAME_SENTENCE = 0.35   # par phrase : même voix 0,43-0,9 ; voix différentes 0,1-0,17, mais 0,3-0,45 pour deux hommes à la voix proche (OSS 117 : 0,3 les fusionnait)
 SOLID = 0.8            # phrases assez longues pour une empreinte fiable ; les autres rejoignent la voix la plus proche
 
 
