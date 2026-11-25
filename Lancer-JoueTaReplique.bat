@@ -3,7 +3,7 @@ setlocal
 chcp 65001 >nul
 set "PYTHONUTF8=1"
 cd /D "%~dp0"
-title Studio Rythmo - laisse cette fenetre ouverte
+title @Raphicollas - laisse cette fenetre ouverte
 
 where uv >nul 2>nul
 if errorlevel 1 (
@@ -13,7 +13,7 @@ if errorlevel 1 (
 if exist "%USERPROFILE%\.local\bin\uv.exe" set "PATH=%USERPROFILE%\.local\bin;%PATH%"
 
 echo.
-echo  Studio Rythmo demarre. La premiere fois, l'installation prend 10 a 20 minutes.
+echo  @Raphicollas demarre. La premiere fois, l'installation prend 10 a 20 minutes.
 echo  La page s'ouvrira toute seule dans ton navigateur.
 echo.
 uv run start.py --web

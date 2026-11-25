@@ -198,7 +198,7 @@
     renderAll();
     const secure = window.isSecureContext && navigator.mediaDevices && window.MediaRecorder;
     $("#st-mic-warn").classList.toggle("hidden", !!secure);
-    $("#st-mic-warn").textContent = secure ? "" : "Le micro du navigateur demande une adresse sécurisée (https). Sur le téléphone, ouvre Studio Rythmo avec l'adresse « Accès depuis partout » (Réglages → Téléphone).";
+    $("#st-mic-warn").textContent = secure ? "" : "Le micro du navigateur demande une adresse sécurisée (https). Sur le téléphone, ouvre @Raphicollas avec l'adresse « Accès depuis partout » (Réglages → Téléphone).";
     $("#st-sp-warn").classList.toggle("hidden", !proj.speakers_error);
     $("#st-sp-warn").textContent = proj.speakers_error || "";
     sepInfo();
@@ -528,7 +528,7 @@
       stream = stream && stream.active ? stream : await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
     } catch {
-      if (window.pywebview && confirm("Le micro n'est pas accessible dans cette fenêtre. Ouvrir Studio Rythmo dans ton navigateur pour enregistrer ?")) {
+      if (window.pywebview && confirm("Le micro n'est pas accessible dans cette fenêtre. Ouvrir @Raphicollas dans ton navigateur pour enregistrer ?")) {
         window.pywebview.api.open_browser();
         return;
       }

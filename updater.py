@@ -1,4 +1,4 @@
-"""Mise à jour de Studio Rythmo depuis l'appli, sans retélécharger l'installateur.
+"""Mise à jour de @Raphicollas depuis l'appli, sans retélécharger l'installateur.
 
 L'appli lit la dernière version publiée sur GitHub, télécharge son code et le pose dans son dossier
 (réglages, vidéos et moteur installé gardés). Elle se relance ensuite : le lanceur reconnaît le code

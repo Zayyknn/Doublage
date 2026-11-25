@@ -91,7 +91,7 @@
       <label class="toggle" style="margin-top:8px"><span>Accès depuis partout<small>4G, travail… via un tunnel Cloudflare gratuit et sécurisé</small></span>
         <span class="switch"><input type="checkbox" data-act="remote" ${setup.remote_access ? "checked" : ""}><i></i></span></label>
       ${setup.remote_access ? (t.url ? `<div class="qr" data-qr="remote"></div><div class="url">${t.url}</div>
-          <p class="hint" style="text-align:center;margin-top:4px">L'adresse change à chaque démarrage de Studio Rythmo.</p>`
+          <p class="hint" style="text-align:center;margin-top:4px">L'adresse change à chaque démarrage de @Raphicollas.</p>`
         : `<div class="status"><span class="dot warn"></span>${t.error ? esc(t.error) : (t.status || "Ouverture…")}</div>`) : ""}
       ${setup.password ? `<div class="sub" style="text-align:center"><small style="color:var(--muted)">Mot de passe à entrer sur le téléphone</small><div class="url" style="font-size:17px">${esc(setup.password)}</div></div>` : ""}
       <p class="hint" style="margin-top:10px">Astuce : sur le téléphone, « Partager → Sur l'écran d'accueil » pour l'avoir comme une appli.</p>`;
@@ -111,7 +111,7 @@
   const STEPS = [
     (b) => {
       b.innerHTML = `<h1>Bienvenue 👋</h1>
-        <p class="lede">Studio Rythmo traduit et double tes vidéos, depuis ce PC ou ton téléphone. Trois réglages rapides et c'est prêt.</p>
+        <p class="lede">@Raphicollas traduit et double tes vidéos, depuis ce PC ou ton téléphone. Trois réglages rapides et c'est prêt.</p>
         <div class="choices">
           <div class="choice"><span class="ic">🎬</span><span><b>Une vidéo ou un lien YouTube</b><small>Tu choisis la langue, l'appli fait le reste.</small></span></div>
           <div class="choice"><span class="ic">🎙️</span><span><b>Nouvelle voix + sous-titres</b><small>La musique d'origine est gardée.</small></span></div>

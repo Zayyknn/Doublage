@@ -1,4 +1,4 @@
-"""Installateur et désinstallateur Windows de Studio Rythmo, aux couleurs de l'application.
+"""Installateur et désinstallateur Windows de @Raphicollas, aux couleurs de l'application.
 
 JoueTaReplique-Setup.exe contient l'application (dossier `payload/JoueTaReplique`). L'installation :
 1. copie l'application dans le dossier choisi (par défaut %LOCALAPPDATA%\\Programs\\JoueTaReplique) ;
@@ -66,7 +66,7 @@ def shell_folder(name: str) -> Path:
         ctypes.windll.ole32.CoTaskMemFree(out)
 
 
-def shortcut(path: Path, target: Path, args: str = "", description: str = "Studio Rythmo"):
+def shortcut(path: Path, target: Path, args: str = "", description: str = "@Raphicollas"):
     """Raccourci .lnk. Les chemins passent par des variables d'environnement : accents, espaces et
     apostrophes arrivent intacts à PowerShell, sans aucun échappement."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -86,7 +86,7 @@ def register(install_dir: Path, size_mb: int):
     import winreg
     exe = install_dir / "JoueTaReplique.exe"
     with winreg.CreateKey(winreg.HKEY_CURRENT_USER, UNINSTALL_KEY) as key:
-        for name, value in {"DisplayName": "Studio Rythmo", "DisplayVersion": version(), "Publisher": "Studio Rythmo",
+        for name, value in {"DisplayName": "@Raphicollas", "DisplayVersion": version(), "Publisher": "@Raphicollas",
                             "DisplayIcon": f"{exe},0", "InstallLocation": str(install_dir),
                             "UninstallString": f'"{exe}" --uninstall', "QuietUninstallString": f'"{exe}" --uninstall'}.items():
             winreg.SetValueEx(key, name, 0, winreg.REG_SZ, value)
@@ -164,7 +164,7 @@ def run(uninstall: bool = False):
             for wanted, folder in (("desktop", "Desktop"), ("startmenu", "Programs")):
                 if options.get(wanted):
                     try:
-                        shortcut(shell_folder(folder) / "Studio Rythmo.lnk", exe)
+                        shortcut(shell_folder(folder) / "@Raphicollas.lnk", exe)
                     except Exception as exc:  # l'appli reste installée, on le signale seulement
                         js("setLog", f"Raccourci non créé : {exc}")
             size = sum(f.stat().st_size for f in target.rglob("*") if f.is_file()) // (1 << 20)
@@ -194,7 +194,7 @@ def run(uninstall: bool = False):
         try:
             stop_running()
             target = installed_dir() or Path(sys.executable).parent
-            for link in (shell_folder("Desktop") / "Studio Rythmo.lnk", shell_folder("Programs") / "Studio Rythmo.lnk"):
+            for link in (shell_folder("Desktop") / "@Raphicollas.lnk", shell_folder("Programs") / "@Raphicollas.lnk"):
                 link.unlink(missing_ok=True)
             data = L.home()
             if purge:
@@ -216,7 +216,7 @@ def run(uninstall: bool = False):
         except Exception as exc:
             js("setUninstallError", f"La désinstallation a échoué : {exc}")
 
-    window = webview.create_window("Désinstaller Studio Rythmo" if uninstall else "Installer Studio Rythmo", html=html,
+    window = webview.create_window("Désinstaller @Raphicollas" if uninstall else "Installer @Raphicollas", html=html,
                                    js_api=Api(), width=640, height=580, resizable=False, background_color="#07080d")
     state["window"] = window
     window.events.closing += lambda: state["engine"] and state["engine"].stop()

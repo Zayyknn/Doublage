@@ -1,7 +1,7 @@
-"""Studio Rythmo — l'application à double-cliquer (Windows .exe, Mac .app).
+"""@Raphicollas — l'application à double-cliquer (Windows .exe, Mac .app).
 
-Studio Rythmo s'ouvre dans sa propre fenêtre (pywebview : Edge WebView2 sur Windows, WebKit sur Mac).
-Sans pywebview, une petite fenêtre simple prend le relais et Studio Rythmo s'ouvre dans le navigateur.
+@Raphicollas s'ouvre dans sa propre fenêtre (pywebview : Edge WebView2 sur Windows, WebKit sur Mac).
+Sans pywebview, une petite fenêtre simple prend le relais et @Raphicollas s'ouvre dans le navigateur.
 
 Elle contient le code de l'appli et l'outil `uv`. Au premier lancement, elle copie l'appli dans le dossier
 de l'utilisateur et installe tout (Python, modèles…) en montrant la progression. Ensuite elle démarre le moteur
@@ -22,7 +22,7 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-APP = "Studio Rythmo"
+APP = "@Raphicollas"
 APP_DIR = "JoueTaReplique"  # nom des dossiers et fichiers : sans espace ni accent
 PORT = 8765
 RESTART = 75  # code de sortie du moteur après « Mettre à jour » (updater.py) : on le relance
@@ -155,9 +155,9 @@ class Engine:
             if self.install_only and code == 0:
                 self.events.put(("done", None))
             elif code not in (0, None) and not getattr(self, "stopping", False):
-                self.events.put(("error", f"Studio Rythmo s'est arrêté (code {code}). Le détail est dans {self.log}"))
+                self.events.put(("error", f"@Raphicollas s'est arrêté (code {code}). Le détail est dans {self.log}"))
         except Exception as exc:
-            self.events.put(("error", f"Impossible de démarrer Studio Rythmo : {exc}"))
+            self.events.put(("error", f"Impossible de démarrer @Raphicollas : {exc}"))
 
     def _launch(self, env: dict) -> int:
             self.proc = subprocess.Popen(
@@ -283,18 +283,18 @@ def run_window():
         webbrowser.open(URL)
 
     def quit_app():
-        status.configure(text="Arrêt de Studio Rythmo…")
+        status.configure(text="Arrêt de @Raphicollas…")
         root.update()
         engine.stop()
         root.destroy()
 
-    open_btn = button(buttons, "Ouvrir Studio Rythmo", open_app, primary=True)
+    open_btn = button(buttons, "Ouvrir @Raphicollas", open_app, primary=True)
     quit_btn = button(buttons, "Quitter", quit_app)
     quit_btn.pack(side="right")
     root.protocol("WM_DELETE_WINDOW", quit_app)
 
     if state["first"]:
-        status.configure(text="Première ouverture : installation de Studio Rythmo.\nCompte 10 à 20 minutes, une seule fois. "
+        status.configure(text="Première ouverture : installation de @Raphicollas.\nCompte 10 à 20 minutes, une seule fois. "
                               "Laisse cette fenêtre ouverte.")
 
     def poll():
@@ -311,7 +311,7 @@ def run_window():
                     state["ready"] = True
                     bar.stop()
                     bar.configure(mode="determinate", value=100)
-                    status.configure(text="Studio Rythmo est prêt. Garde cette fenêtre ouverte (tu peux la réduire).", fg=TEXT)
+                    status.configure(text="@Raphicollas est prêt. Garde cette fenêtre ouverte (tu peux la réduire).", fg=TEXT)
                     lines = []
                     if engine.lan:
                         lines.append(f"Sur ton téléphone (même Wi-Fi) : {engine.lan}")
