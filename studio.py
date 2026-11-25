@@ -123,7 +123,7 @@ def _speakers(project_dir: Path, num: int = -1, progress=None):
     words = read(project_dir, "words.json", [])
     meta = read(project_dir, "meta.json", {})
     try:
-        segments = core.diarize(project_dir / "vocals.m4a", num, progress)
+        segments = core.diarize(project_dir / "vocals.m4a", num, progress, words)
         count = core.assign_speakers(words, segments)
         meta.pop("speakers_error", None)
     except Exception as exc:

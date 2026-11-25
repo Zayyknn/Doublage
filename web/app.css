@@ -337,6 +337,10 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
 }
 
 .nav-brand { display: none; }
+nav.tabs button { position: relative; }
+.badge { position: absolute; top: 6px; right: 14px; width: 10px; height: 10px; border-radius: 50%; background: #ff3b4f;
+  box-shadow: 0 0 0 2px #15161f, 0 0 10px rgba(255,59,79,.8); }
+@media (min-width: 1000px) { .badge { position: static; margin-left: auto; } }
 .btn.danger.armed { background: var(--bad); color: #fff; border-color: var(--bad); }
 
 /* Grand écran (Mac, PC, télé) : menu sur le côté, contenu sur toute la largeur, cartes en colonnes */

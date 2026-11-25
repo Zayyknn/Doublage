@@ -518,6 +518,7 @@ async function checkUpdate(force) {
   else if (update.newer) info.textContent = `Version ${update.current} — la version ${update.latest} est disponible.`;
   else info.textContent = `Version ${update.current} — à jour.`;
   $("#upd-go").classList.toggle("hidden", !update.newer);
+  $("#upd-badge").classList.toggle("hidden", !update.newer);  // pastille rouge sur Réglages
   $("#upd-go").textContent = update.newer ? `Mettre à jour (${update.latest})` : "Mettre à jour";
   return update;
 }
@@ -564,6 +565,7 @@ $("#upd-check").addEventListener("click", async () => {
   renderEngines();
   if (window.initSetup) window.initSetup();
   checkUpdate(false);
+  setInterval(() => checkUpdate(true), 30 * 60 * 1000);  // une nouvelle version apparaît sans relancer l'appli
   const s = await api("/api/status");
   if (s.total_steps === STUDIO_STEPS) return;
   if (["running", "paused", "stopping"].includes(s.state)) startPolling();

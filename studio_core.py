@@ -103,7 +103,7 @@ def ensure_models(progress=None) -> tuple[Path, Path]:
     return segmentation, embedding
 
 
-def diarize(audio: Path, num_speakers: int = -1, progress=None) -> list[tuple[float, float, int]]:
+def diarize(audio: Path, num_speakers: int = -1, progress=None, words: list[dict] | None = None) -> list[tuple[float, float, int]]:
     """Segments (début, fin, personne) de la piste de voix. num_speakers = -1 : compte automatique."""
     import numpy as np
     import sherpa_onnx
@@ -138,18 +138,122 @@ def diarize(audio: Path, num_speakers: int = -1, progress=None) -> list[tuple[fl
             progress(done / total)
         return 0
 
+    extractor = sherpa_onnx.SpeakerEmbeddingExtractor(config.embedding)
+    if words:  # une empreinte de voix par phrase : une phrase = une seule personne
+        if progress:
+            progress(0.5)
+        return voices_by_sentence(words, samples, sd.sample_rate, extractor, int(num_speakers))
     result = sd.process(samples, callback=callback).sort_by_start_time()
     segments = [(float(r.start), float(r.end), int(r.speaker)) for r in result]
     if num_speakers <= 0:
-        extractor = sherpa_onnx.SpeakerEmbeddingExtractor(config.embedding)
         segments = regroup_voices(segments, samples, sd.sample_rate, extractor)
     return segments
+
+
+def sentences(words: list[dict], max_len: float = 6.0) -> list[tuple[float, float]]:
+    """Découpe le texte en phrases (ponctuation de fin ou silence) : les personnes changent entre deux phrases.
+    Dans « Oh vraiment ? Ouais. », chaque phrase a sa voix, alors qu'un morceau de 8 s en mélangerait deux."""
+    spans, cur = [], []
+    for i, w in enumerate(words):
+        if cur and w["s"] - cur[-1]["e"] > 0.35:
+            spans.append(cur); cur = []
+        cur.append(w)
+        if w["w"].rstrip()[-1:] in ".?!…" or i == len(words) - 1:
+            spans.append(cur); cur = []
+    if cur:
+        spans.append(cur)
+    out = []
+    for span in spans:                       # une phrase très longue : coupée au plus grand silence
+        stack = [span]
+        while stack:
+            part = stack.pop()
+            if part[-1]["e"] - part[0]["s"] > max_len and len(part) > 1:
+                k = max(range(1, len(part)), key=lambda j: part[j]["s"] - part[j - 1]["e"])
+                stack += [part[k:], part[:k]]
+            else:
+                out.append((part[0]["s"], part[-1]["e"]))
+    return sorted(out)
+
+
+def voices_by_sentence(words, samples, rate, extractor, num: int = -1) -> list[tuple[float, float, int]]:
+    """Regroupe les phrases par voix. num > 0 : exactement num personnes ; sinon le compte est automatique."""
+    import numpy as np
+
+    def embed(s, e):
+        a, b = max(0, int((s - 0.05) * rate)), min(len(samples), int((e + 0.05) * rate))
+        stream = extractor.create_stream()
+        stream.accept_waveform(rate, np.ascontiguousarray(samples[a:b]))
+        stream.input_finished()
+        v = np.array(extractor.compute(stream), dtype=np.float32)
+        return v / (np.linalg.norm(v) or 1)
+
+    spans = sentences(words)
+    if not spans:
+        return []
+    vecs = [embed(s, e) if e - s >= 0.25 else None for s, e in spans]
+    solid = [i for i, (s, e) in enumerate(spans) if e - s >= SOLID and vecs[i] is not None]
+    if len(solid) < 2:
+        solid = [i for i, v in enumerate(vecs) if v is not None]
+    if not solid:
+        return [(s, e, 0) for s, e in spans]
+    clusters = [[i] for i in solid]
+    vec = np.stack([vecs[i] for i in solid])
+    sim = vec @ vec.T
+    np.fill_diagonal(sim, -1)
+    size = [1] * len(clusters)
+    alive = list(range(len(clusters)))
+    while len(alive) > 1:                     # regroupement hiérarchique, lien moyen
+        if num > 0 and len(alive) <= num:
+            break
+        sub = sim[np.ix_(alive, alive)]
+        i, j = np.unravel_index(np.argmax(sub), sub.shape)
+        if num <= 0 and sub[i, j] < SAME_SENTENCE:
+            break
+        a, b = alive[i], alive[j]
+        sim[a, :] = (sim[a, :] * size[a] + sim[b, :] * size[b]) / (size[a] + size[b])
+        sim[:, a] = sim[a, :]
+        sim[a, a] = -1
+        size[a] += size[b]
+        clusters[a] += clusters[b]
+        alive.remove(b)
+    groups = [clusters[k] for k in alive]
+
+    def centroid(g):
+        v = np.mean([vecs[i] for i in g], axis=0)
+        return v / (np.linalg.norm(v) or 1)
+
+    if num <= 0:  # une « personne » qui parle moins de MIN_SPEECH s en tout : rattachée à la voix la plus proche
+        while len(groups) > 1:
+            talk = [sum(spans[i][1] - spans[i][0] for i in g) for g in groups]
+            k = int(np.argmin(talk))
+            if talk[k] >= MIN_SPEECH:
+                break
+            small = groups.pop(k)
+            c = centroid(small)
+            best = max(range(len(groups)), key=lambda o: float(centroid(groups[o]) @ c))
+            groups[best] += small
+    label = {}
+    for n, g in enumerate(groups):
+        for i in g:
+            label[i] = n
+    cents = [centroid(g) for g in groups]
+    for i, (s, e) in enumerate(spans):        # phrases courtes : la voix la plus ressemblante
+        if i in label:
+            continue
+        if vecs[i] is not None:
+            label[i] = int(np.argmax([float(c @ vecs[i]) for c in cents]))
+        else:
+            near = min(label, key=lambda j: min(abs(spans[j][0] - e), abs(s - spans[j][1])))
+            label[i] = label[near]
+    return [(s, e, label[i]) for i, (s, e) in enumerate(spans)]
 
 
 SAME_VOICE = 0.5       # ressemblance moyenne (cosinus) entre passages au-delà de laquelle c'est la même voix
                        # mesuré sur des passages de 1 à 4 s : même voix 0,5-0,9, voix différentes 0,1-0,35
 MIN_SPEECH = 2.5       # en dessous, en secondes, ce n'est pas une personne de plus : on la rattache à la plus proche
-PIECE = 8.0            # longueur des morceaux analysés, en secondes
+PIECE = 8.0            # longueur des morceaux analysés, en secondes (repli sans texte)
+SAME_SENTENCE = 0.3    # par phrase : même voix 0,43-0,9, voix différentes 0,1-0,17 (mesuré, 5e et 95e centiles)
+SOLID = 0.8            # phrases assez longues pour une empreinte fiable ; les autres rejoignent la voix la plus proche
 
 
 def regroup_voices(segments, samples, rate, extractor) -> list[tuple[float, float, int]]:
@@ -244,7 +348,8 @@ def assign_speakers(words: list[dict], segments: list[tuple[float, float, int]])
     # Un mot isolé entre deux mots d'une autre personne, à moins d'une demi-seconde : on le lisse
     for i in range(1, len(words) - 1):
         a, w, b = words[i - 1], words[i], words[i + 1]
-        if a["sp"] == b["sp"] != w["sp"] and w["s"] - a["e"] < 0.5 and b["s"] - w["e"] < 0.5:
+        ends = lambda x: x["w"].rstrip()[-1:] in ".?!…"  # « vraiment ? Ouais. Tu » : « Ouais. » est une phrase, on n'y touche pas
+        if a["sp"] == b["sp"] != w["sp"] and w["s"] - a["e"] < 0.5 and b["s"] - w["e"] < 0.5 and not ends(a) and not ends(w):
             w["sp"] = a["sp"]
     # Numérotation dans l'ordre d'apparition : Personne 1 est la première qui parle
     order = {}
