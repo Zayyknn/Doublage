@@ -561,11 +561,12 @@ async function applyBackground() {
   $("#bg-mode").value = mode;
   let has = false;
   try { has = (await fetch("/api/background", { method: "HEAD", cache: "no-store" })).ok; } catch {}
-  const src = has ? `url("/api/background?t=${Date.now()}")` : "";
+  const mine = has ? `url("/api/background?t=${Date.now()}")` : "";
+  const src = mode === "studio" ? 'url("/fond-studio.jpg")' : mine;   // la photo fournie avec l'appli, ou la sienne
   $("#wallpaper").style.backgroundImage = src;
-  $("#bg-preview").style.backgroundImage = src;
+  $("#bg-preview").style.backgroundImage = mode === "studio" ? src : mine;
   $("#bg-remove").disabled = !has;
-  document.body.classList.toggle("photo-bg", mode === "photo" && has);
+  document.body.classList.toggle("photo-bg", mode === "studio" || (mode === "photo" && has));
 }
 // La photo est convertie en JPEG (2560 px au plus) avant l'envoi : les photos d'iPhone (HEIC) passent aussi.
 function toJpeg(file) {
