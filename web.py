@@ -570,6 +570,47 @@ def tunnel_toggle(data: dict = Body(...)):
     return jobs["tunnel"]
 
 
+# ------------------------------------------------------------------ fond d'écran choisi par l'utilisateur
+
+# Sa photo reste sur son ordinateur, dans un dossier que les mises à jour ne touchent pas (jamais dans le dépôt public).
+BACKGROUND_DIR = ROOT / "fond"
+BACKGROUND_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
+
+
+def _background_file():
+    return next((p for p in BACKGROUND_DIR.glob("fond.*")), None) if BACKGROUND_DIR.exists() else None
+
+
+@app.api_route("/api/background", methods=["GET", "HEAD"])
+def background_get():
+    path = _background_file()
+    if not path:
+        raise HTTPException(404, "Pas de photo de fond")
+    return FileResponse(path, headers={"Cache-Control": "no-cache"})
+
+
+@app.post("/api/background")
+async def background_set(request: Request):
+    kind = request.headers.get("content-type", "").split(";")[0].strip().lower()
+    if kind not in BACKGROUND_TYPES:
+        raise HTTPException(415, "Choisis une image JPEG, PNG ou WebP.")
+    data = await request.body()
+    if not data or len(data) > 25 * 1024 * 1024:
+        raise HTTPException(413, "Image trop lourde (25 Mo au plus).")
+    BACKGROUND_DIR.mkdir(exist_ok=True)
+    for old in BACKGROUND_DIR.glob("fond.*"):
+        old.unlink(missing_ok=True)
+    (BACKGROUND_DIR / ("fond" + BACKGROUND_TYPES[kind])).write_bytes(data)
+    return {"ok": True}
+
+
+@app.delete("/api/background")
+def background_delete():
+    for old in BACKGROUND_DIR.glob("fond.*") if BACKGROUND_DIR.exists() else []:
+        old.unlink(missing_ok=True)
+    return {"ok": True}
+
+
 # ------------------------------------------------------------------ mise à jour depuis l'appli
 
 import updater  # noqa: E402

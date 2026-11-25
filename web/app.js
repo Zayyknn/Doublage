@@ -552,6 +552,56 @@ $("#upd-check").addEventListener("click", async () => {
   if (!u.newer) toast(u.error && !u.latest ? u.error : "Studio Rythmo est à jour");
 });
 
+// ---------------------------------------------------------------- fond d'écran (Réglages)
+
+const BG_KEY = "doublage.fond";
+function bgMode() { try { return localStorage.getItem(BG_KEY) || "aurora"; } catch { return "aurora"; } }
+async function applyBackground() {
+  const mode = bgMode();
+  $("#bg-mode").value = mode;
+  let has = false;
+  try { has = (await fetch("/api/background", { method: "HEAD", cache: "no-store" })).ok; } catch {}
+  const src = has ? `url("/api/background?t=${Date.now()}")` : "";
+  $("#wallpaper").style.backgroundImage = src;
+  $("#bg-preview").style.backgroundImage = src;
+  $("#bg-remove").disabled = !has;
+  document.body.classList.toggle("photo-bg", mode === "photo" && has);
+}
+// La photo est convertie en JPEG (2560 px au plus) avant l'envoi : les photos d'iPhone (HEIC) passent aussi.
+function toJpeg(file) {
+  return new Promise((ok, fail) => {
+    const img = new Image(), src = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, 2560 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(src);
+      c.toBlob((b) => (b ? ok(b) : fail(new Error("Image illisible"))), "image/jpeg", 0.88);
+    };
+    img.onerror = () => { URL.revokeObjectURL(src); fail(new Error("Ce format d'image n'est pas lu ici")); };
+    img.src = src;
+  });
+}
+$("#bg-mode").addEventListener("change", (e) => {
+  try { localStorage.setItem(BG_KEY, e.target.value); } catch {}
+  applyBackground();
+  if (e.target.value === "photo" && $("#bg-remove").disabled) $("#bg-file").click();
+});
+$("#bg-file").addEventListener("change", async (e) => {
+  const file = e.target.files[0]; e.target.value = "";
+  if (!file) return;
+  try {
+    const body = await toJpeg(file);
+    await api("/api/background", { method: "POST", headers: { "Content-Type": "image/jpeg" }, body });
+    try { localStorage.setItem(BG_KEY, "photo"); } catch {}
+    await applyBackground(); toast("Fond d'écran changé");
+  } catch (err) { toast(err.message); }
+});
+$("#bg-remove").addEventListener("click", async () => {
+  await api("/api/background", { method: "DELETE" });
+  try { localStorage.setItem(BG_KEY, "aurora"); } catch {}
+  applyBackground();
+});
+
 // ---------------------------------------------------------------- démarrage
 
 (async function init() {
@@ -565,6 +615,7 @@ $("#upd-check").addEventListener("click", async () => {
   renderEngines();
   if (window.initSetup) window.initSetup();
   checkUpdate(false);
+  applyBackground();
   setInterval(() => checkUpdate(true), 30 * 60 * 1000);  // une nouvelle version apparaît sans relancer l'appli
   const s = await api("/api/status");
   if (s.total_steps === STUDIO_STEPS) return;

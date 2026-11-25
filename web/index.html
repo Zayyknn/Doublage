@@ -15,6 +15,7 @@
 </head>
 <body>
 <div class="aurora"><i></i><i></i><i></i></div>
+<div class="wallpaper" id="wallpaper"></div>
 <div class="glass toast" id="toast"></div>
 
 <div class="app">
@@ -288,6 +289,16 @@
       <label class="toggle"><span>Séparer la voix de la musique avant la transcription<small>Plus précis sur les vidéos avec musique, un peu plus long</small></span><span class="switch"><input type="checkbox" id="demucs"><i></i></span></label>
       <label class="field" id="cb-field"><span>Expressivité de Chatterbox</span>
         <select id="cb-exag"><option value="0.3">Calme</option><option value="0.5">Naturelle</option><option value="0.8">Expressive</option><option value="1.2">Très expressive</option></select></label>
+    </div>
+
+    <div class="glass card">
+      <h2>Fond d'écran</h2>
+      <label class="field"><span>Fond</span><select id="bg-mode">
+        <option value="aurora">Dégradé de couleurs</option><option value="photo">Ma photo</option></select></label>
+      <div class="bg-row"><div class="bg-preview" id="bg-preview"></div>
+        <div class="btns"><label class="btn small">Choisir une photo<input type="file" id="bg-file" accept="image/*" hidden></label>
+        <button class="btn small ghost" id="bg-remove">Retirer</button></div></div>
+      <p class="hint" style="margin-top:10px">La photo reste sur cet ordinateur.</p>
     </div>
 
     <button class="btn primary" id="save">Enregistrer</button>

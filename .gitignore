@@ -185,3 +185,6 @@ videolingo_*.log
 # Construction des applications
 /build/
 /dist/
+
+# fond d'écran choisi par l'utilisateur : reste sur son ordinateur
+fond/

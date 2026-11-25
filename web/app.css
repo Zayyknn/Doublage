@@ -342,6 +342,13 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
 }
 
 .nav-brand { display: none; }
+/* fond d'écran : la photo de l'utilisateur, assombrie pour que tout reste lisible */
+.wallpaper { position: fixed; inset: 0; z-index: -1; display: none; background: #07080d center / cover no-repeat; }
+.wallpaper::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(7,8,13,.55), rgba(7,8,13,.78)); }
+body.photo-bg .wallpaper { display: block; }
+body.photo-bg .aurora { display: none; }
+.bg-row { display: flex; align-items: center; gap: 14px; }
+.bg-preview { width: 112px; height: 70px; flex: none; border-radius: 12px; border: 1px solid var(--line); background: rgba(0,0,0,.3) center / cover no-repeat; }
 nav.tabs button { position: relative; }
 .badge { position: absolute; top: 6px; right: 14px; width: 10px; height: 10px; border-radius: 50%; background: #ff3b4f;
   box-shadow: 0 0 0 2px #15161f, 0 0 10px rgba(255,59,79,.8); }
