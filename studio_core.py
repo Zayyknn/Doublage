@@ -311,10 +311,10 @@ def voices_by_sentence(words, samples, rate, extractor, num: int = -1) -> list[t
         v = np.mean([vecs[i] for i in g], axis=0)
         return v / (np.linalg.norm(v) or 1)
 
-    if num <= 0:  # une « personne » d'une seule phrase, ou qui parle moins de MIN_SPEECH s en tout : rattachée à la
-        while len(groups) > 1:  # voix la plus proche (un « Allez, allez. » chuchoté n'est pas un personnage de plus)
+    if num <= 0:  # une « personne » qui parle moins de MIN_SPEECH s en tout : rattachée à la voix la plus proche.
+        while len(groups) > 1:  # Une seule phrase peut être un vrai personnage (Scary Movie : le copain qui crie « À l'aide ! »)
             talk = [sum(spans[i][1] - spans[i][0] for i in g) for g in groups]
-            weak = [k for k, g in enumerate(groups) if len(g) < 2 or talk[k] < MIN_SPEECH]
+            weak = [k for k, g in enumerate(groups) if talk[k] < MIN_SPEECH]
             if not weak:
                 break
             k = min(weak, key=lambda k: talk[k])
@@ -333,8 +333,15 @@ def voices_by_sentence(words, samples, rate, extractor, num: int = -1) -> list[t
     for i, (s, e) in enumerate(spans):        # phrases courtes : la voix la plus ressemblante
         if i in label:
             continue
-        if len(groups) == 2 and i > 0 and (i - 1) in label and asks(i - 1) and e - s < SOLID:
-            label[i] = 1 - label[i - 1]       # « Oh vraiment ? » « Ouais. » : la réponse courte vient de l'autre
+        if len(groups) >= 2 and i > 0 and (i - 1) in label and asks(i - 1) and e - s < SOLID:
+            # « Oh vraiment ? » « Ouais. » : la réponse courte vient d'une autre personne que celle qui demande —
+            # la plus ressemblante, ou à défaut celle qui a parlé juste avant la question
+            others = [k for k in range(len(groups)) if k != label[i - 1]]
+            if vecs[i] is not None:
+                label[i] = max(others, key=lambda k: float(cents[k] @ vecs[i]))
+            else:
+                before = [label[j] for j in range(i - 2, -1, -1) if j in label and label[j] != label[i - 1]]
+                label[i] = before[0] if before else others[0]
         elif vecs[i] is not None:
             label[i] = int(np.argmax([float(c @ vecs[i]) for c in cents]))
         else:
