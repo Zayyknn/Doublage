@@ -214,7 +214,10 @@ def update_project(project_id: str, data: dict = Body(...)):
             write(path, "words.json", sorted(words, key=lambda w: w["s"]))
         if "speakers" in data:
             meta["speakers"] = [{"id": int(s["id"]), "name": str(s["name"]).strip()[:30] or f"Personne {int(s['id']) + 1}",
-                                 "color": core.COLORS[int(s["id"]) % len(core.COLORS)]} for s in data["speakers"]]
+                                 "color": core.COLORS[int(s["id"]) % len(core.COLORS)],
+                                 # image de présentation choisie à la main (seconde de la vidéo)
+                                 **({"portrait": round(float(s["portrait"]), 2)} if isinstance(s.get("portrait"), (int, float)) else {})}
+                                for s in data["speakers"]]
         if "latency_ms" in data:
             meta["latency_ms"] = max(-1000, min(1000, int(data["latency_ms"])))
         if "mix" in data:

@@ -406,30 +406,73 @@
   }
 
   // ------------------------------------------------------------ présentation : logo puis les personnages
-  function grabPortraits(p) {   // pour chaque personne, une image prise au milieu de sa plus longue réplique
-    const longest = new Map();
-    buildLines(p.words).forEach((l) => { const b = longest.get(l.sp); if (!b || l.e - l.s > b.e - b.s) longest.set(l.sp, l); });
+  // Image de présentation de chaque personne. Celle qui parle n'est pas toujours à l'écran (Ghostface au téléphone :
+  // on voit la blonde) : parmi les images prises pendant ses répliques, on garde la plus différente de celles des
+  // autres personnes. Une image choisie à la main (bouton 📷 de la carte Personnes) passe avant tout.
+  function grabPortraits(p) {
+    const byLen = new Map();
+    buildLines(p.words).forEach((l) => { if (!byLen.has(l.sp)) byLen.set(l.sp, []); byLen.get(l.sp).push(l); });
+    const todo = [];
+    p.speakers.forEach((s) => {
+      if (typeof s.portrait === "number") { todo.push({ sp: s.id, t: s.portrait, manual: true }); return; }
+      (byLen.get(s.id) || []).sort((a, b) => (b.e - b.s) - (a.e - a.s)).slice(0, 6)
+        .forEach((l) => todo.push({ sp: s.id, t: (l.s + l.e) / 2 }));
+    });
+    const shots = [];
     const v = document.createElement("video");
     v.muted = true; v.preload = "auto"; v.src = url("original.mp4");
-    const todo = [...longest.entries()];
+    const thumb = document.createElement("canvas"); thumb.width = 32; thumb.height = 18;
+    const tctx = thumb.getContext("2d", { willReadFrequently: true });
+    const dist = (a, b) => { let d = 0; for (let i = 0; i < a.length; i += 4) d += Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]); return d / (a.length * 0.75 * 255); };
+    const choose = () => {
+      const talk = new Map(); (byLen.size ? [...byLen] : []).forEach(([sp, ls]) => talk.set(sp, ls.reduce((n, l) => n + l.e - l.s, 0)));
+      const order = [...new Set(shots.map((x) => x.sp))].sort((a, b) => (talk.get(b) || 0) - (talk.get(a) || 0));
+      const chosen = [];
+      for (const sp of order) {
+        const mine = shots.filter((x) => x.sp === sp), others = shots.filter((x) => x.sp !== sp);
+        const manual = mine.find((x) => x.manual);
+        let best = manual, score = 1;
+        if (!best) for (const c of mine) {
+          const near = Math.min(...[...chosen, ...others].map((o) => dist(c.px, o.px)), 1);
+          if (!best || near > score) { best = c; score = near; }
+        }
+        const dup = !manual && chosen.length && Math.min(...chosen.map((o) => dist(best.px, o.px))) < 0.03;
+        if (best && !dup) { portraits.set(sp, best.url); chosen.push(best); } else portraits.delete(sp);  // pas deux fois la même image
+      }
+    };
     const next = () => {
-      if (proj !== p || !todo.length) { v.removeAttribute("src"); v.load(); return; }
-      const [sp, l] = todo.shift();
+      if (proj !== p) return;
+      if (!todo.length) { v.removeAttribute("src"); v.load(); choose(); return; }
+      const job = todo.shift();
       v.addEventListener("seeked", () => {
         const c = document.createElement("canvas");
         c.width = 480; c.height = Math.round(480 * (v.videoHeight / v.videoWidth || 9 / 16));
         c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
-        try { portraits.set(sp, c.toDataURL("image/jpeg", 0.85)); } catch {}
+        tctx.drawImage(v, 0, 0, 32, 18);
+        try { shots.push({ ...job, url: c.toDataURL("image/jpeg", 0.85), px: tctx.getImageData(0, 0, 32, 18).data }); } catch {}
         next();
       }, { once: true });
-      v.currentTime = (l.s + l.e) / 2;
+      v.currentTime = job.t;
     };
     v.addEventListener("loadeddata", next, { once: true });
+  }
+  function fitCastNames() {     // le nom tient dans son panneau : on réduit la taille jusqu'à ce qu'il ne soit plus rogné
+    $("#st-intro").querySelectorAll(".cast b").forEach((b) => {
+      if (!b.firstElementChild) b.innerHTML = `<span style="display:inline-block">${esc(b.textContent)}</span>`;
+      b.style.fontSize = "";
+      const cs = getComputedStyle(b), room = () => b.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      let size = parseFloat(cs.fontSize);
+      while (b.firstElementChild.offsetWidth > room() && size > 10) { size -= 1; b.style.fontSize = size + "px"; }
+    });
+    const names = [...$("#st-intro").querySelectorAll(".cast b")];   // tous les noms à la même taille, la plus petite
+    const min = Math.min(...names.map((b) => parseFloat(getComputedStyle(b).fontSize)));
+    names.forEach((b) => (b.style.fontSize = min + "px"));
   }
   let introDone = null;
   function intro() {            // résout true quand la présentation est finie, false si on l'a arrêtée
     const box = $("#st-intro"), logo = box.querySelector(".intro-logo"), cast = box.querySelector(".intro-cast");
     cast.querySelector("h2").textContent = proj.title.replace(/\s+\d{1,2}-\d{1,2}\s+\d{1,2}h\d{2}$/, "");
+    cast.querySelector(".cast").style.setProperty("--n", proj.speakers.length);
     cast.querySelector(".cast").innerHTML = proj.speakers.map((s, i) =>
       `<div style="--c:${s.color};--i:${i}">${portraits.has(s.id) ? `<img src="${portraits.get(s.id)}" alt="">` : ""}<b>${esc(s.name)}</b></div>`).join("");
     box.classList.remove("hidden"); logo.classList.remove("hidden"); cast.classList.add("hidden");
@@ -437,7 +480,7 @@
       const timers = [];
       const finish = (result) => { timers.forEach(clearTimeout); box.classList.add("hidden"); box.onclick = null; introDone = null; ok(result); };
       introDone = finish;
-      timers.push(setTimeout(() => { logo.classList.add("hidden"); cast.classList.remove("hidden"); }, 2000));
+      timers.push(setTimeout(() => { logo.classList.add("hidden"); cast.classList.remove("hidden"); fitCastNames(); }, 2000));
       timers.push(setTimeout(() => finish(true), 2000 + 1500 + proj.speakers.length * 700));
       box.onclick = () => finish(true);
     });
@@ -535,8 +578,17 @@
     $("#st-people").innerHTML = proj.speakers.map((s) => {
       const n = lines.filter((l) => l.sp === s.id).length, c = proj.clips.filter((k) => k.sp === s.id).length;
       return `<div class="person" style="--c:${s.color}"><i></i><input type="text" value="${esc(s.name)}" data-sp="${s.id}" maxlength="30">
-        <small>${n} réplique${n > 1 ? "s" : ""} · ${c} prise${c > 1 ? "s" : ""}</small></div>`;
+        <small>${n} réplique${n > 1 ? "s" : ""} · ${c} prise${c > 1 ? "s" : ""}</small>
+        <button class="btn small icon ghost${typeof s.portrait === "number" ? " picked" : ""}" data-portrait="${s.id}"
+          title="Image de présentation : prendre l'image affichée en ce moment dans la vidéo">📷</button></div>`;
     }).join("");
+    $("#st-people").querySelectorAll("[data-portrait]").forEach((b) => (b.onclick = async () => {
+      const s = speaker(Number(b.dataset.portrait));
+      s.portrait = Math.round((video.currentTime || 0) * 100) / 100;
+      await save({ speakers: proj.speakers });
+      portraits = new Map(); grabPortraits(proj); renderPeople();
+      D.toast(`Image de ${s.name} : celle de ${fmt(s.portrait)}`);
+    }));
     $("#st-people").querySelectorAll("input").forEach((el) => el.addEventListener("change", async () => {
       speaker(Number(el.dataset.sp)).name = el.value.trim() || `Personne ${Number(el.dataset.sp) + 1}`;
       await save({ speakers: proj.speakers });
