@@ -256,7 +256,10 @@ def reseparate(project_id: str):
     def run():
         hq_ambiance, hq_vocals = path / "_ambiance.wav", path / "_vocals.wav"
         try:
-            core.separate_voices(path / "original.mp4", hq_ambiance, hq_vocals)
+            def progress(part, step):
+                job["progress"], job["step"] = round(part, 3), step
+            core.separate_voices(path / "original.mp4", hq_ambiance, hq_vocals, progress)
+            job["progress"], job["step"] = 0.97, "Création des pistes"
             core.ffmpeg("-i", str(path / "original.mp4"), "-i", str(hq_ambiance), "-map", "0:v:0", "-map", "1:a:0",
                         "-c:v", "copy", "-c:a", "aac", "-b:a", "256k", "-shortest", "-movflags", "+faststart",
                         str(path / "ambiance.new.mp4"))

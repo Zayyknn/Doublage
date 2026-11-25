@@ -46,25 +46,73 @@ SEPARATION_MODEL = "model_bs_roformer_ep_317_sdr_12.9755.ckpt"   # BS-RoFormer (
 # contre -21 dB (-4 dB au pire, les « ah » qu'on entend) avec Demucs htdemucs.
 
 
-def separate_voices(media: Path, ambiance_wav: Path, vocals_wav: Path):
-    """Sépare voix et ambiance sur le son d'origine en pleine qualité (stéréo 44,1 kHz)."""
+class _Bar:
+    """Remplace les barres tqdm du séparateur pour suivre l'avancement réel (téléchargement, puis morceaux)."""
+    hook = None
+
+    def __init__(self, iterable=None, total=None, **_):
+        self.iterable, self.n = iterable, 0
+        self.total = total if total is not None else (len(iterable) if hasattr(iterable, "__len__") else 0)
+
+    def __iter__(self):
+        for item in self.iterable:
+            yield item
+            self.update(1)
+
+    def update(self, k=1):
+        self.n += k
+        if _Bar.hook and self.total:
+            _Bar.hook(min(1.0, self.n / self.total))
+
+    def close(self):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        pass
+
+
+def separate_voices(media: Path, ambiance_wav: Path, vocals_wav: Path, progress=None):
+    """Sépare voix et ambiance sur le son d'origine en pleine qualité (stéréo 44,1 kHz).
+    progress(part 0-1, étape) : avancement réel, pour la barre de l'appli."""
+    import sys
     os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")  # Mac : une opération absente du GPU Apple passe au processeur au lieu d'échouer
     from audio_separator.separator import Separator
-    work =ambiance_wav.parent / "_separation"
+    report = progress or (lambda *_: None)
+    modules = [m for name, m in list(sys.modules.items()) if name.startswith("audio_separator") and hasattr(m, "tqdm")]
+    saved = {m: m.tqdm for m in modules}
+    work = ambiance_wav.parent / "_separation"
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
     try:
+        report(0.02, "Extraction du son")
         source = work / "source.wav"
         ffmpeg("-i", str(media), "-map", "0:a:0", "-vn", "-ac", "2", "-ar", "44100", "-c:a", "pcm_f32le", str(source))
         sep = Separator(output_dir=str(work), output_format="WAV", model_file_dir=str(ROOT / "_model_cache" / "separation"),
                         log_level=30)
+        for m in [m for name, m in list(sys.modules.items()) if name.startswith("audio_separator") and hasattr(m, "tqdm")]:
+            saved.setdefault(m, m.tqdm)
+            m.tqdm = _Bar
+        report(0.05, "Préparation du moteur")
+        _Bar.hook = lambda p: report(0.05 + 0.15 * p, f"Téléchargement du moteur (une seule fois) {round(p * 100)} %")
         sep.load_model(model_filename=SEPARATION_MODEL)
+        for m in [m for name, m in list(sys.modules.items()) if name.startswith("audio_separator") and hasattr(m, "tqdm")]:
+            saved.setdefault(m, m.tqdm)  # modules chargés avec le modèle
+            m.tqdm = _Bar
+        report(0.2, "Retrait des voix 0 %")
+        _Bar.hook = lambda p: report(0.2 + 0.75 * p, f"Retrait des voix {round(p * 100)} %")
         files = [work / Path(f).name for f in sep.separate(str(source))]
+        report(0.96, "Finition")
         inst = next(f for f in files if "(instrumental)" in f.name.lower())
         voc = next(f for f in files if "(vocals)" in f.name.lower())
         shutil.move(str(inst), ambiance_wav)
         shutil.move(str(voc), vocals_wav)
     finally:
+        _Bar.hook = None
+        for m, original in saved.items():
+            m.tqdm = original
         shutil.rmtree(work, ignore_errors=True)
 
 

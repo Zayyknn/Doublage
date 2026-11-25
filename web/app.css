@@ -386,4 +386,7 @@ nav.tabs button { position: relative; }
 }
 @media (min-width: 1700px) { #v-settings.on { columns: 3; } }
 
+.sep-prog { width: 100%; margin: 0 0 12px; }
+.sep-prog .sep-line { display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px; color: var(--text); }
+.sep-prog .progress { margin: 8px 0 0; }
 .sep-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: -4px 0 14px; font-size: 13px; color: var(--muted); }

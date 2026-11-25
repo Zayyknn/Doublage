@@ -559,11 +559,17 @@
     const st = $("#st-sep-status"), id = proj.id;
     $("#st-sep-go").disabled = true;
     st.classList.remove("hidden");
-    st.innerHTML = `<span class="dot warn"></span>Retrait des voix en cours… (une à quelques minutes)`;
+    st.innerHTML = `<div class="sep-prog"><div class="sep-line"><span id="st-sep-step">Démarrage…</span><b id="st-sep-pct">0 %</b></div>
+      <div class="progress"><div id="st-sep-bar"></div></div></div>`;
     const timer = setInterval(async () => {
       let p;
       try { p = await D.api(`/api/studio/${encodeURIComponent(id)}`); } catch { return; }
-      if (p.job && p.job.running) return;
+      if (p.job && p.job.running) {  // avancement réel envoyé par le moteur
+        const pct = Math.round((p.job.progress || 0) * 100);
+        if ($("#st-sep-bar")) { $("#st-sep-bar").style.width = pct + "%"; $("#st-sep-pct").textContent = pct + " %";
+          $("#st-sep-step").textContent = p.job.step || "Retrait des voix…"; }
+        return;
+      }
       clearInterval(timer);
       st.classList.add("hidden"); $("#st-sep-go").disabled = false;
       if (!proj || proj.id !== id) return;
