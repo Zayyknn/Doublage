@@ -20,8 +20,12 @@
 <div class="app">
   <header class="top">
     <div class="brand"><img src="/icon.svg" alt="">Joue ta réplique</div>
-    <span class="pill" id="sys"><span class="dot"></span>Connexion…</span>
+    <div class="top-right">
+      <button class="btn small primary hidden" id="upd-go">Mettre à jour</button>
+      <span class="pill" id="sys"><span class="dot"></span>Connexion…</span>
+    </div>
   </header>
+  <div class="upd-veil hidden" id="upd-veil"><div class="glass card"><h2>Mise à jour</h2><p id="upd-msg">Téléchargement…</p><div class="upd-bar"><i></i></div></div></div>
 
   <!-- ============================== DOUBLER ============================== -->
   <section class="view on" id="v-dub">
@@ -290,7 +294,9 @@
     <div class="glass card" style="margin-top:14px">
       <h2>Ce PC</h2>
       <p id="sys-detail" style="margin:0 0 14px;color:var(--muted)"></p>
-      <div class="btns"><button class="btn small" id="rerun-wizard">Relancer l'assistant</button>
+      <p id="upd-info" style="margin:0 0 14px;color:var(--muted)">Version…</p>
+      <div class="btns"><button class="btn small" id="upd-check">Rechercher une mise à jour</button>
+      <button class="btn small" id="rerun-wizard">Relancer l'assistant</button>
       <button class="btn small ghost" id="logout">Se déconnecter</button></div>
     </div>
   </section>

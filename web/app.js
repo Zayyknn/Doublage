@@ -508,6 +508,49 @@ window.doublage = { api, post, toast, upload, fmtSize, LANGS, get settings() { r
   get system() { return system; }, set system(v) { system = v; }, renderSettings: () => renderSettings(), renderEngines: () => renderEngines(),
   renderSystem: () => renderSystem() };
 
+// ---------------------------------------------------------------- mise à jour depuis l'appli
+
+let update = null;
+async function checkUpdate(force) {
+  try { update = await api("/api/update" + (force ? "?force=true" : "")); } catch (e) { update = { error: e.message }; }
+  const info = $("#upd-info");
+  if (update.error && !update.latest) info.textContent = `Version ${update.current || "?"} — ${update.error}`;
+  else if (update.newer) info.textContent = `Version ${update.current} — la version ${update.latest} est disponible.`;
+  else info.textContent = `Version ${update.current} — à jour.`;
+  $("#upd-go").classList.toggle("hidden", !update.newer);
+  $("#upd-go").textContent = update.newer ? `Mettre à jour (${update.latest})` : "Mettre à jour";
+  return update;
+}
+
+async function applyUpdate() {
+  const veil = $("#upd-veil"), msg = $("#upd-msg");
+  veil.classList.remove("hidden");
+  msg.textContent = "Téléchargement de la nouvelle version…";
+  let target;
+  try { target = (await post("/api/update")).latest; } catch (e) { msg.textContent = e.message; setTimeout(() => veil.classList.add("hidden"), 4000); return; }
+  const started = Date.now();
+  const tick = async () => {
+    let r = null;
+    try { r = await fetch("/api/update", { cache: "no-store" }).then((x) => x.ok ? x.json() : null); } catch {}
+    if (r && r.step === "error") { msg.textContent = "La mise à jour a échoué : " + r.error; setTimeout(() => veil.classList.add("hidden"), 6000); return; }
+    if (r && r.step === "manual") { msg.textContent = "Mise à jour installée. Ferme puis rouvre Joue ta réplique pour l'utiliser."; return; }
+    // le nouveau moteur répond « idle » ; l'ancien, qui a déjà le nouveau fichier VERSION, dit « restart »
+    if (r && r.current === target && r.step === "idle") { msg.textContent = "C'est fait, ouverture…"; location.replace("/?v=" + encodeURIComponent(target)); return; }
+    if (r && r.step === "install") msg.textContent = "Installation…";
+    else if (!r) msg.textContent = Date.now() - started > 60000
+      ? "Redémarrage… s'il faut installer de nouveaux outils, ça peut prendre quelques minutes."
+      : "Redémarrage de Joue ta réplique…";
+    setTimeout(tick, 1500);
+  };
+  setTimeout(tick, 1500);
+}
+
+$("#upd-go").addEventListener("click", applyUpdate);
+$("#upd-check").addEventListener("click", async () => {
+  const u = await checkUpdate(true);
+  if (!u.newer) toast(u.error && !u.latest ? u.error : "Joue ta réplique est à jour");
+});
+
 // ---------------------------------------------------------------- démarrage
 
 (async function init() {
@@ -520,6 +563,7 @@ window.doublage = { api, post, toast, upload, fmtSize, LANGS, get settings() { r
   renderSystem();
   renderEngines();
   if (window.initSetup) window.initSetup();
+  checkUpdate(false);
   const s = await api("/api/status");
   if (s.total_steps === STUDIO_STEPS) return;
   if (["running", "paused", "stopping"].includes(s.state)) startPolling();

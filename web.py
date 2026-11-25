@@ -570,6 +570,41 @@ def tunnel_toggle(data: dict = Body(...)):
     return jobs["tunnel"]
 
 
+# ------------------------------------------------------------------ mise à jour depuis l'appli
+
+import updater  # noqa: E402
+
+
+def _restart_engine():
+    """Le lanceur (DOUBLAGE_LAUNCHER) relance le moteur quand il sort avec le code RESTART."""
+    if not os.environ.get("DOUBLAGE_LAUNCHER"):
+        updater.state["step"] = "manual"  # lancé à la main : il faut le relancer soi-même
+        return
+
+    def leave():
+        if tunnel_process and tunnel_process.poll() is None:
+            tunnel_process.terminate()
+        os._exit(updater.RESTART)
+    threading.Timer(1.5, leave).start()
+
+
+@app.get("/api/update")
+def update_check(force: bool = False):
+    try:
+        return updater.check(force)
+    except Exception as exc:
+        return {"current": updater.current(), "newer": False, "error": f"GitHub injoignable : {exc}",
+                "step": updater.state["step"]}
+
+
+@app.post("/api/update")
+def update_apply():
+    try:
+        return updater.apply(_restart_engine)
+    except Exception as exc:
+        raise HTTPException(502, f"Mise à jour impossible : {exc}")
+
+
 # ------------------------------------------------------------------ studio (ma voix à la place)
 
 import studio  # noqa: E402

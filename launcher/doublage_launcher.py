@@ -25,6 +25,7 @@ from pathlib import Path
 APP = "Joue ta réplique"
 APP_DIR = "JoueTaReplique"  # nom des dossiers et fichiers : sans espace ni accent
 PORT = 8765
+RESTART = 75  # code de sortie du moteur après « Mettre à jour » (updater.py) : on le relance
 URL = f"http://localhost:{PORT}"
 WINDOWS = sys.platform == "win32"
 NO_WINDOW = 0x08000000 if WINDOWS else 0  # CREATE_NO_WINDOW : pas de console qui s'ouvre
@@ -47,12 +48,24 @@ def home() -> Path:
     return base / APP_DIR
 
 
+def version_key(version: str) -> tuple:
+    return tuple(int(n) for n in re.findall(r"\d+", version)) or (0,)
+
+
 def install_files(src: Path, dst: Path) -> bool:
-    """Copie le code de l'appli s'il a changé. Garde les réglages et les vidéos de l'utilisateur."""
+    """Copie le code de l'appli s'il a changé. Garde les réglages et les vidéos de l'utilisateur.
+
+    Le bouton « Mettre à jour » de l'appli pose une version plus récente que celle de l'installateur :
+    on ne la remplace jamais par une plus ancienne."""
     version = (src / "VERSION").read_text(encoding="utf-8").strip() if (src / "VERSION").exists() else "dev"
     current = dst / "VERSION"
-    if current.exists() and current.read_text(encoding="utf-8").strip() == version:
-        return False
+    if current.exists():
+        installed = current.read_text(encoding="utf-8").strip()
+        if installed == version:
+            return False
+        if re.search(r"\d+\.\d+", installed) and re.search(r"\d+\.\d+", version) \
+                and version_key(installed) > version_key(version) and (dst / "web.py").exists():
+            return False
     dst.mkdir(parents=True, exist_ok=True)
     for item in src.iterdir():
         target = dst / item.name
@@ -131,8 +144,22 @@ class Engine:
                 self.events.put(("ready", None))
                 return
             self.log.parent.mkdir(exist_ok=True)
-            env = dict(os.environ, PYTHONUTF8="1", PYTHONUNBUFFERED="1", DOUBLAGE_NO_BROWSER="1",
+            env = dict(os.environ, PYTHONUTF8="1", PYTHONUNBUFFERED="1", DOUBLAGE_NO_BROWSER="1", DOUBLAGE_LAUNCHER="1",
                        UV_PYTHON_PREFERENCE="only-managed", PATH=str(self.uv.parent) + os.pathsep + os.environ.get("PATH", ""))
+            while True:
+                code = self._launch(env)
+                if code == RESTART and not self.install_only and not getattr(self, "stopping", False):
+                    self.events.put(("log", "Mise à jour installée : redémarrage du moteur"))
+                    continue  # « Mettre à jour » dans l'appli : le nouveau code est posé, on relance
+                break
+            if self.install_only and code == 0:
+                self.events.put(("done", None))
+            elif code not in (0, None) and not getattr(self, "stopping", False):
+                self.events.put(("error", f"Joue ta réplique s'est arrêté (code {code}). Le détail est dans {self.log}"))
+        except Exception as exc:
+            self.events.put(("error", f"Impossible de démarrer Joue ta réplique : {exc}"))
+
+    def _launch(self, env: dict) -> int:
             self.proc = subprocess.Popen(
                 [str(self.uv), "run", "--no-project", "--python", "3.12", "start.py",
                  "--install-only" if self.install_only else "--web"],
@@ -147,13 +174,7 @@ class Engine:
                     log.write(line)
                     log.flush()
                     self._read(line.rstrip())
-            code = self.proc.wait()
-            if self.install_only and code == 0:
-                self.events.put(("done", None))
-            elif code not in (0, None) and not getattr(self, "stopping", False):
-                self.events.put(("error", f"Joue ta réplique s'est arrêté (code {code}). Le détail est dans {self.log}"))
-        except Exception as exc:
-            self.events.put(("error", f"Impossible de démarrer Joue ta réplique : {exc}"))
+            return self.proc.wait()
 
     def _read(self, line: str):
         if not line.strip():
