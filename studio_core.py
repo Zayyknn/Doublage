@@ -97,7 +97,12 @@ def separate_voices(media: Path, ambiance_wav: Path, vocals_wav: Path, progress=
             m.tqdm = _Bar
         report(0.05, "Préparation du moteur")
         _Bar.hook = lambda p: report(0.05 + 0.15 * p, f"Téléchargement du moteur (une seule fois) {round(p * 100)} %")
-        sep.load_model(model_filename=SEPARATION_MODEL)
+        try:
+            sep.load_model(model_filename=SEPARATION_MODEL)
+        except Exception:  # modèle à moitié téléchargé (appli fermée pendant le téléchargement) : on le reprend
+            for f in (ROOT / "_model_cache" / "separation").glob(SEPARATION_MODEL.rsplit(".", 1)[0] + "*"):
+                f.unlink(missing_ok=True)
+            sep.load_model(model_filename=SEPARATION_MODEL)
         for m in [m for name, m in list(sys.modules.items()) if name.startswith("audio_separator") and hasattr(m, "tqdm")]:
             saved.setdefault(m, m.tqdm)  # modules chargés avec le modèle
             m.tqdm = _Bar
