@@ -546,7 +546,7 @@
   };
   // ------------------------------------------------------------ refaire le retrait des voix
   function sepInfo() {
-    $("#st-sep-info").textContent = proj.separation === "roformer" ? "Voix retirées en haute qualité (MDX-Net HQ)"
+    $("#st-sep-info").textContent = proj.separation === "roformer" ? "Voix retirées en haute qualité (Mel-RoFormer Bleedless)"
       : "Voix retirées avec l'ancienne méthode (Demucs) : des voix restent";
     const err = proj.separation_error && proj.separation !== "roformer";
     $("#st-sep-status").classList.toggle("hidden", !err);

@@ -41,9 +41,10 @@ def speakers_meta(count: int, previous: list | None = None) -> list:
 
 # ------------------------------------------------------------------ retrait des voix (ambiance seule)
 
-SEPARATION_MODEL = "UVR-MDX-NET-Inst_HQ_4.onnx"   # MDX-Net Inst HQ 4 : mesuré sur un dialogue (voix normale + téléphone)
-# mêlé de bruitages, sur processeur : 8,7 s pour 42 s de vidéo et -51 / -49 dB de voix restante, contre 66 s et
-# -50 / -48 dB pour BS-RoFormer (ancien choix), 176 s pour MDX23C. Modèle de 56 Mo au lieu de 640 Mo.
+SEPARATION_MODEL = "mel_band_roformer_instrumental_bleedless_v3_gabox.ckpt"   # Mel-RoFormer « Bleedless » (Gabox)
+# Mesuré sur une vraie scène (Scary Movie, voix au téléphone) en repassant un détecteur de voix sur l'ambiance :
+# -64 dB de voix restante, aucun passage audible ; MDX-Net Inst HQ 4 -41 dB avec une phrase audible, Demucs -9 dB.
+# Sur processeur : 37 s pour 42 s de vidéo (BS-RoFormer : 65 s pour -68 dB). Modèle de 913 Mo, téléchargé une fois.
 OLD_SEPARATION_MODEL = "model_bs_roformer_ep_317_sdr_12.9755.ckpt"   # BS-RoFormer (viperx) : mesuré sur un dialogue
 # mêlé à de la musique, il reste -28 dB de dialogue dans l'ambiance en moyenne (-11 dB au pire passage),
 # contre -21 dB (-4 dB au pire, les « ah » qu'on entend) avec Demucs htdemucs.
