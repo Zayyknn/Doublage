@@ -90,8 +90,18 @@ def separate_voices(media: Path, ambiance_wav: Path, vocals_wav: Path, progress=
         report(0.02, "Extraction du son")
         source = work / "source.wav"
         ffmpeg("-i", str(media), "-map", "0:a:0", "-vn", "-ac", "2", "-ar", "44100", "-c:a", "pcm_f32le", str(source))
-        sep = Separator(output_dir=str(work), output_format="WAV", model_file_dir=str(ROOT / "_model_cache" / "separation"),
-                        log_level=30)
+        cls = Separator
+        if sys.platform == "darwin":
+            # Sur le GPU des Mac (MPS), BS-RoFormer ne traitait aucun morceau en plusieurs minutes. Le processeur
+            # va à coup sûr : environ 1,5 fois la durée de la vidéo, même qualité (mesuré).
+            class CpuSeparator(Separator):
+                def setup_torch_device(self, system_info):
+                    import torch
+                    self.torch_device_cpu = self.torch_device = torch.device("cpu")
+                    self.onnx_execution_provider = ["CPUExecutionProvider"]
+            cls = CpuSeparator
+        sep = cls(output_dir=str(work), output_format="WAV", model_file_dir=str(ROOT / "_model_cache" / "separation"),
+                  log_level=30)
         for m in [m for name, m in list(sys.modules.items()) if name.startswith("audio_separator") and hasattr(m, "tqdm")]:
             saved.setdefault(m, m.tqdm)
             m.tqdm = _Bar
