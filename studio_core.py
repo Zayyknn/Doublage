@@ -218,15 +218,32 @@ def diarize(audio: Path, num_speakers: int = -1, progress=None, words: list[dict
     return segments
 
 
+def fix_punctuation(words: list[dict]) -> bool:
+    """La transcription colle la ponctuation française au mot suivant (« quoi », « ? Ou »). On la rend au mot
+    d'avant : sinon deux répliques de deux personnes forment une seule phrase. Renvoie True si quelque chose a changé."""
+    import re
+    changed = False
+    for i in range(1, len(words)):
+        m = re.match(r"^\s*([?!.…:;,]+)\s+(\S.*)$", words[i]["w"])
+        if m:
+            words[i - 1]["w"] = words[i - 1]["w"].rstrip() + ("" if m.group(1)[0] in ".,…" else " ") + m.group(1)
+            words[i]["w"] = m.group(2)
+            changed = True
+    return changed
+
+
 def sentences(words: list[dict], max_len: float = 6.0) -> list[tuple[float, float]]:
     """Découpe le texte en phrases (ponctuation de fin ou silence) : les personnes changent entre deux phrases.
     Dans « Oh vraiment ? Ouais. », chaque phrase a sa voix, alors qu'un morceau de 8 s en mélangerait deux."""
     spans, cur = [], []
+    ends = lambda x: x["w"].rstrip()[-1:] in ".?!…"
     for i, w in enumerate(words):
-        if cur and w["s"] - cur[-1]["e"] > 0.35:
+        # Un silence ne coupe la phrase que si elle était finie, ou s'il est long : « C'est un black et il …
+        # va te niquer la tête » reste une seule phrase (et une seule personne).
+        if cur and (w["w"].lstrip()[:1] in ".?!…" or w["s"] - cur[-1]["e"] > (0.35 if ends(cur[-1]) else 1.5)):
             spans.append(cur); cur = []
         cur.append(w)
-        if w["w"].rstrip()[-1:] in ".?!…" or i == len(words) - 1:
+        if ends(w) or i == len(words) - 1:
             spans.append(cur); cur = []
     if cur:
         spans.append(cur)
@@ -240,7 +257,11 @@ def sentences(words: list[dict], max_len: float = 6.0) -> list[tuple[float, floa
                 stack += [part[k:], part[:k]]
             else:
                 out.append((part[0]["s"], part[-1]["e"]))
+                QUESTIONS[(part[0]["s"], part[-1]["e"])] = part[-1]["w"].rstrip().endswith("?")
     return sorted(out)
+
+
+QUESTIONS: dict = {}  # (début, fin) d'une phrase -> elle se termine par une question (rempli par sentences)
 
 
 def voices_by_sentence(words, samples, rate, extractor, num: int = -1) -> list[tuple[float, float, int]]:
@@ -290,12 +311,13 @@ def voices_by_sentence(words, samples, rate, extractor, num: int = -1) -> list[t
         v = np.mean([vecs[i] for i in g], axis=0)
         return v / (np.linalg.norm(v) or 1)
 
-    if num <= 0:  # une « personne » qui parle moins de MIN_SPEECH s en tout : rattachée à la voix la plus proche
-        while len(groups) > 1:
+    if num <= 0:  # une « personne » d'une seule phrase, ou qui parle moins de MIN_SPEECH s en tout : rattachée à la
+        while len(groups) > 1:  # voix la plus proche (un « Allez, allez. » chuchoté n'est pas un personnage de plus)
             talk = [sum(spans[i][1] - spans[i][0] for i in g) for g in groups]
-            k = int(np.argmin(talk))
-            if talk[k] >= MIN_SPEECH:
+            weak = [k for k, g in enumerate(groups) if len(g) < 2 or talk[k] < MIN_SPEECH]
+            if not weak:
                 break
+            k = min(weak, key=lambda k: talk[k])
             small = groups.pop(k)
             c = centroid(small)
             best = max(range(len(groups)), key=lambda o: float(centroid(groups[o]) @ c))
@@ -305,10 +327,15 @@ def voices_by_sentence(words, samples, rate, extractor, num: int = -1) -> list[t
         for i in g:
             label[i] = n
     cents = [centroid(g) for g in groups]
+    def asks(j):                              # la phrase j se termine par une question
+        return QUESTIONS.get(spans[j], False)
+
     for i, (s, e) in enumerate(spans):        # phrases courtes : la voix la plus ressemblante
         if i in label:
             continue
-        if vecs[i] is not None:
+        if len(groups) == 2 and i > 0 and (i - 1) in label and asks(i - 1) and e - s < SOLID:
+            label[i] = 1 - label[i - 1]       # « Oh vraiment ? » « Ouais. » : la réponse courte vient de l'autre
+        elif vecs[i] is not None:
             label[i] = int(np.argmax([float(c @ vecs[i]) for c in cents]))
         else:
             near = min(label, key=lambda j: min(abs(spans[j][0] - e), abs(s - spans[j][1])))
@@ -402,6 +429,11 @@ def assign_speakers(words: list[dict], segments: list[tuple[float, float, int]])
         return 1
     segments = sorted(segments)
     for w in words:
+        if w["e"] - w["s"] < 0.02:  # mot sans durée (« Ouais. » collé à 0 s) : la phrase la plus précise qui le contient
+            inside = [(e - s, sp) for s, e, sp in segments if s - 0.01 <= w["s"] <= e + 0.01]
+            if inside:
+                w["sp"] = min(inside)[1]
+                continue
         best, best_overlap, best_gap = None, 0.0, 1e9
         for start, end, sp in segments:
             if start > w["e"] + 5:
