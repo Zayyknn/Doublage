@@ -285,8 +285,13 @@ def voices_by_sentence(words, samples, rate, extractor, num: int = -1) -> list[t
         solid = [i for i, v in enumerate(vecs) if v is not None]
     if not solid:
         return [(s, e, 0) for s, e in spans]
+    # 1. Empreintes recentrées sur l'extrait : on compare les voix entre elles plutôt qu'à un seuil absolu,
+    #    qui ne marche jamais partout (deux hommes à la voix proche dans OSS 117, voix très différentes ailleurs).
+    #    Ce premier regroupement découpe large (une même voix peut y être coupée en plusieurs morceaux).
+    mu = np.mean([vecs[i] for i in solid], axis=0)
+    centered = {i: (lambda u: u / (np.linalg.norm(u) or 1))(vecs[i] - mu) for i in solid}
     clusters = [[i] for i in solid]
-    vec = np.stack([vecs[i] for i in solid])
+    vec = np.stack([centered[i] for i in solid])
     sim = vec @ vec.T
     np.fill_diagonal(sim, -1)
     size = [1] * len(clusters)
@@ -296,7 +301,7 @@ def voices_by_sentence(words, samples, rate, extractor, num: int = -1) -> list[t
             break
         sub = sim[np.ix_(alive, alive)]
         i, j = np.unravel_index(np.argmax(sub), sub.shape)
-        if num <= 0 and sub[i, j] < SAME_SENTENCE:
+        if num <= 0 and sub[i, j] < SPLIT:
             break
         a, b = alive[i], alive[j]
         sim[a, :] = (sim[a, :] * size[a] + sim[b, :] * size[b]) / (size[a] + size[b])
@@ -306,6 +311,28 @@ def voices_by_sentence(words, samples, rate, extractor, num: int = -1) -> list[t
         clusters[a] += clusters[b]
         alive.remove(b)
     groups = [clusters[k] for k in alive]
+
+    # 2. Deux morceaux sont la même voix s'ils se ressemblent entre eux presque autant qu'à l'intérieur de chacun
+    #    (rapport ≥ SAME_RATIO). C'est relatif à chaque extrait : une voix seule n'est plus coupée en plusieurs.
+    def within(g):
+        if len(g) < 2:
+            return None
+        m = np.stack([vecs[i] for i in g]); s = m @ m.T
+        return float((s.sum() - len(g)) / (len(g) * (len(g) - 1)))
+
+    def ratio(a, b):
+        wa, wb = within(a), within(b)
+        ref = [w for w in (wa, wb) if w is not None]
+        if not ref:
+            return 0.0
+        cross = float(np.mean([vecs[i] @ vecs[j] for i in a for j in b]))
+        return cross / (sum(ref) / len(ref))
+
+    while num <= 0 and len(groups) > 1:
+        r, a, b = max((ratio(groups[a], groups[b]), a, b) for a in range(len(groups)) for b in range(a + 1, len(groups)))
+        if r < SAME_RATIO:
+            break
+        groups[a] += groups.pop(b)
 
     def centroid(g):
         v = np.mean([vecs[i] for i in g], axis=0)
@@ -354,7 +381,12 @@ SAME_VOICE = 0.5       # ressemblance moyenne (cosinus) entre passages au-delà 
                        # mesuré sur des passages de 1 à 4 s : même voix 0,5-0,9, voix différentes 0,1-0,35
 MIN_SPEECH = 2.5       # en dessous, en secondes, ce n'est pas une personne de plus : on la rattache à la plus proche
 PIECE = 8.0            # longueur des morceaux analysés, en secondes (repli sans texte)
-SAME_SENTENCE = 0.35   # par phrase : même voix 0,43-0,9 ; voix différentes 0,1-0,17, mais 0,3-0,45 pour deux hommes à la voix proche (OSS 117 : 0,3 les fusionnait)
+# Compte automatique des personnes, réglé sur un banc de 23 scènes (1 à 4 voix, voix proches, téléphone, écho,
+# bruit, Scary Movie réel) : 1. regroupement des empreintes recentrées jusqu'à SPLIT, 2. fusion des morceaux dont
+# le rapport « ressemblance entre eux / ressemblance à l'intérieur » dépasse SAME_RATIO.
+# Mesuré : voix différentes 0,70 au plus, même voix coupée 0,73 au moins.
+SPLIT = 0.15         # parfait de 0,10 à 0,20 sur le banc : on prend le milieu
+SAME_RATIO = 0.72
 SOLID = 0.8            # phrases assez longues pour une empreinte fiable ; les autres rejoignent la voix la plus proche
 
 
