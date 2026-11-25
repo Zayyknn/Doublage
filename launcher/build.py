@@ -1,4 +1,4 @@
-"""Construit l'application Joue ta réplique (Windows .exe ou Mac .app) avec PyInstaller.
+"""Construit l'application Studio Rythmo (Windows .exe ou Mac .app) avec PyInstaller.
 
     python launcher/build.py
 
@@ -84,19 +84,19 @@ def main():
     if sys.platform == "darwin":  # le micro du Studio : macOS exige une phrase d'explication
         import plistlib
         built = ROOT / "dist" / "JoueTaReplique.app"
-        app_path = ROOT / "dist" / "Joue ta réplique.app"  # le nom que montre le Finder
+        app_path = ROOT / "dist" / "Studio Rythmo.app"  # le nom que montre le Finder
         shutil.rmtree(app_path, ignore_errors=True)
         built.rename(app_path)
         plist = app_path / "Contents" / "Info.plist"
         info = plistlib.loads(plist.read_bytes())
-        info.update({"NSMicrophoneUsageDescription": "Joue ta réplique enregistre ta voix dans le Studio.",
-                     "CFBundleDisplayName": "Joue ta réplique", "CFBundleName": "Joue ta réplique", "CFBundleShortVersionString": version.lstrip("v"),
+        info.update({"NSMicrophoneUsageDescription": "Studio Rythmo enregistre ta voix dans le Studio.",
+                     "CFBundleDisplayName": "Studio Rythmo", "CFBundleName": "Studio Rythmo", "CFBundleShortVersionString": version.lstrip("v"),
                      "NSHighResolutionCapable": True, "LSMinimumSystemVersion": "11.0"})
         plist.write_bytes(plistlib.dumps(info))
         subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(plist.parent.parent)], check=True)
     if sys.platform == "win32":  # JoueTaReplique-Setup.exe : un seul fichier qui contient l'application et l'installateur
         subprocess.run([sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onefile", "--windowed",
-                        "--name", "JoueTaReplique-Setup", "--icon", str(icon), "--distpath", str(ROOT / "dist"),
+                        "--name", "StudioRythmo-Setup", "--icon", str(icon), "--distpath", str(ROOT / "dist"),
                         "--workpath", str(BUILD / "work-setup"), "--specpath", str(BUILD),
                         "--paths", str(ROOT / "launcher"),
                         "--add-data", f"{ROOT / 'dist' / 'JoueTaReplique'}{sep}payload/JoueTaReplique",

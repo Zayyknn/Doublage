@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Studio Rythmo : une bande rythmo (2 lignes de répliques colorées) traversée par le trait de synchro -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2b2350"/>
+      <stop offset="1" stop-color="#0c0d14"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3fa9ff"/><stop offset="1" stop-color="#6fd0ff"/>
+    </linearGradient>
+    <linearGradient id="orange" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff7a35"/><stop offset="1" stop-color="#ffb35c"/>
+    </linearGradient>
+    <clipPath id="sq"><rect x="100" y="100" width="824" height="824" rx="186"/></clipPath>
+    <filter id="glow" x="-50%" y="-10%" width="200%" height="120%"><feGaussianBlur stdDeviation="14"/></filter>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#bg)"/>
+  <g clip-path="url(#sq)">
+    <!-- les 2 lignes sombres de la bande -->
+    <rect x="100" y="352" width="824" height="150" fill="#32353d"/>
+    <rect x="100" y="522" width="824" height="150" fill="#2a2d34"/>
+    <!-- répliques : bleu en haut, orange en bas -->
+    <rect x="150" y="400" width="150" height="54" rx="27" fill="url(#blue)" opacity=".55"/>
+    <rect x="330" y="400" width="250" height="54" rx="27" fill="url(#blue)"/>
+    <rect x="610" y="400" width="120" height="54" rx="27" fill="url(#blue)"/>
+    <rect x="760" y="400" width="200" height="54" rx="27" fill="url(#blue)"/>
+    <rect x="80" y="570" width="200" height="54" rx="27" fill="url(#orange)" opacity=".55"/>
+    <rect x="470" y="570" width="170" height="54" rx="27" fill="url(#orange)"/>
+    <rect x="670" y="570" width="290" height="54" rx="27" fill="url(#orange)"/>
+  </g>
+  <!-- trait de synchro -->
+  <rect x="356" y="250" width="22" height="524" rx="11" fill="#fff" filter="url(#glow)" opacity=".7"/>
+  <rect x="358" y="250" width="18" height="524" rx="9" fill="#fff"/>
+  <path d="M327 222h80l-40 46z" fill="#fff"/>
+</svg>

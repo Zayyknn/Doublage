@@ -533,13 +533,13 @@ async function applyUpdate() {
     let r = null;
     try { r = await fetch("/api/update", { cache: "no-store" }).then((x) => x.ok ? x.json() : null); } catch {}
     if (r && r.step === "error") { msg.textContent = "La mise à jour a échoué : " + r.error; setTimeout(() => veil.classList.add("hidden"), 6000); return; }
-    if (r && r.step === "manual") { msg.textContent = "Mise à jour installée. Ferme puis rouvre Joue ta réplique pour l'utiliser."; return; }
+    if (r && r.step === "manual") { msg.textContent = "Mise à jour installée. Ferme puis rouvre Studio Rythmo pour l'utiliser."; return; }
     // le nouveau moteur répond « idle » ; l'ancien, qui a déjà le nouveau fichier VERSION, dit « restart »
     if (r && r.current === target && r.step === "idle") { msg.textContent = "C'est fait, ouverture…"; location.replace("/?v=" + encodeURIComponent(target)); return; }
     if (r && r.step === "install") msg.textContent = "Installation…";
     else if (!r) msg.textContent = Date.now() - started > 60000
       ? "Redémarrage… s'il faut installer de nouveaux outils, ça peut prendre quelques minutes."
-      : "Redémarrage de Joue ta réplique…";
+      : "Redémarrage de Studio Rythmo…";
     setTimeout(tick, 1500);
   };
   setTimeout(tick, 1500);
@@ -548,7 +548,7 @@ async function applyUpdate() {
 $("#upd-go").addEventListener("click", applyUpdate);
 $("#upd-check").addEventListener("click", async () => {
   const u = await checkUpdate(true);
-  if (!u.newer) toast(u.error && !u.latest ? u.error : "Joue ta réplique est à jour");
+  if (!u.newer) toast(u.error && !u.latest ? u.error : "Studio Rythmo est à jour");
 });
 
 // ---------------------------------------------------------------- démarrage

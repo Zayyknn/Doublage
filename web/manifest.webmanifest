@@ -1,6 +1,6 @@
 {
-  "name": "Joue ta réplique",
-  "short_name": "Joue ta réplique",
+  "name": "Studio Rythmo",
+  "short_name": "Studio Rythmo",
   "description": "Double tes vidéos dans une autre langue",
   "start_url": "/",
   "display": "standalone",

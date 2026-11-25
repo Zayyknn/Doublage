@@ -1,4 +1,4 @@
-"""Joue ta réplique — application web (PC et smartphone) au-dessus du moteur VideoLingo.
+"""Studio Rythmo — application web (PC et smartphone) au-dessus du moteur VideoLingo.
 
 Lancement : uv run start.py --web   (ou double-clic sur Lancer-JoueTaReplique.bat sous Windows)
 Ouvre ensuite http://localhost:8765 sur le PC, ou l'adresse affichée dans la console sur le téléphone.
@@ -61,7 +61,7 @@ def session_token() -> str:
     return hmac.new(password().encode(), b"doublage-session-v1", hashlib.sha256).hexdigest()
 
 
-app = FastAPI(title="Joue ta réplique", docs_url=None, redoc_url=None)
+app = FastAPI(title="Studio Rythmo", docs_url=None, redoc_url=None)
 
 
 def is_local(request: Request) -> bool:
@@ -653,12 +653,12 @@ if __name__ == "__main__":
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
-    print("\n  Joue ta réplique est prêt — la page s'ouvre dans ton navigateur.")
+    print("\n  Studio Rythmo est prêt — la page s'ouvre dans ton navigateur.")
     print(f"  Sur ce PC          : http://localhost:{PORT}")
     for address in local_addresses():
         print(f"  Téléphone (Wi-Fi)  : http://{address}:{PORT}")
     print(f"  Mot de passe       : {password()}  (demandé seulement depuis un autre appareil)")
-    print("  Laisse cette fenêtre ouverte tant que tu utilises Joue ta réplique.\n")
+    print("  Laisse cette fenêtre ouverte tant que tu utilises Studio Rythmo.\n")
     if load_key_or("remote_access", False):
         start_tunnel()
     if not os.environ.get("DOUBLAGE_NO_BROWSER"):
