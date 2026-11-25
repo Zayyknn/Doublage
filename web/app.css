@@ -332,7 +332,7 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
   #st-editor > #st-back, #st-editor > #st-title, #st-editor > .notice { grid-column: 1 / -1; justify-self: start; }
   #st-editor > .stage { grid-column: 1; grid-row: span 6; position: sticky; top: 16px; }
   #st-editor .screen video { max-height: max(260px, calc(100vh - var(--band-h, 130px) - 430px)); }
-  #st-editor > .text-card { position: sticky; top: 16px; }
+  /* pas de carte collante dans la colonne de droite : les cartes en verre se superposaient en défilant */
   #st-editor .lines { max-height: calc(100vh - 260px); }
 }
 
@@ -345,7 +345,7 @@ nav.tabs button { position: relative; }
 
 /* Grand écran (Mac, PC, télé) : menu sur le côté, contenu sur toute la largeur, cartes en colonnes */
 @media (min-width: 1000px) {
-  nav.tabs { left: 16px; top: 16px; bottom: 16px; transform: none; width: 220px; flex-direction: column; gap: 4px; padding: 18px 12px; border-radius: 24px; }
+  nav.tabs { left: 16px; top: 16px; bottom: auto; transform: none; width: 220px; flex-direction: column; gap: 4px; padding: 18px 12px; border-radius: 24px; }
   nav.tabs button { flex-direction: row; justify-content: flex-start; gap: 12px; font-size: 15px; padding: 12px 14px; border-radius: 14px; min-width: 0; width: 100%; }
   nav.tabs button svg { width: 19px; height: 19px; }
   nav.tabs button:hover:not(.on) { color: var(--text); background: rgba(255,255,255,.04); }
@@ -355,7 +355,7 @@ nav.tabs button { position: relative; }
   .app, .app:has(#v-studio.on #st-editor:not(.hidden)) { max-width: none; margin: 0 0 0 252px; padding: 28px 40px 40px; }
   .app > * { max-width: 1500px; }
   .app > #v-studio:has(#st-editor:not(.hidden)) { max-width: 1900px; }
-  header.top { position: fixed; top: 22px; right: 40px; z-index: 6; margin: 0; }
+  header.top { position: absolute; top: 22px; right: 40px; z-index: 6; margin: 0; }  /* défile avec la page : ne recouvre plus les cartes */
   header.top .brand { display: none; }
   h1 { font-size: 34px; }
   .lede { max-width: 760px; }
