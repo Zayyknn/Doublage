@@ -336,4 +336,49 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
   #st-editor .lines { max-height: calc(100vh - 260px); }
 }
 
+.nav-brand { display: none; }
+
+/* Grand écran (Mac, PC, télé) : menu sur le côté, contenu sur toute la largeur, cartes en colonnes */
+@media (min-width: 1000px) {
+  nav.tabs { left: 16px; top: 16px; bottom: 16px; transform: none; width: 220px; flex-direction: column; gap: 4px; padding: 18px 12px; border-radius: 24px; }
+  nav.tabs button { flex-direction: row; justify-content: flex-start; gap: 12px; font-size: 15px; padding: 12px 14px; border-radius: 14px; min-width: 0; width: 100%; }
+  nav.tabs button svg { width: 19px; height: 19px; }
+  nav.tabs button:hover:not(.on) { color: var(--text); background: rgba(255,255,255,.04); }
+  .nav-brand { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 17px; letter-spacing: -.02em; padding: 2px 8px 22px; }
+  .nav-brand img { width: 30px; height: 30px; }
+
+  .app, .app:has(#v-studio.on #st-editor:not(.hidden)) { max-width: none; margin: 0 0 0 252px; padding: 28px 40px 40px; }
+  .app > * { max-width: 1500px; }
+  .app > #v-studio:has(#st-editor:not(.hidden)) { max-width: 1900px; }
+  header.top { position: fixed; top: 22px; right: 40px; z-index: 6; margin: 0; }
+  header.top .brand { display: none; }
+  h1 { font-size: 34px; }
+  .lede { max-width: 760px; }
+
+  /* Doubler : 2 colonnes de réglages, le bouton en dessous */
+  #setup { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 20px; align-items: start; }
+  #setup > #go { grid-column: 1 / -1; max-width: 420px; justify-self: end; }
+  #setup .drop { min-height: 190px; }
+  #run, #result { max-width: 980px; }
+
+  /* Studio, accueil : nouvelle vidéo à gauche, les vidéos à droite */
+  #st-home { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 20px; align-items: start; }
+  #st-home > h1, #st-home > .lede { grid-column: 1 / -1; }
+  #st-home > #st-new, #st-home > #st-run { grid-column: 1; }
+  #st-home > #st-projects { grid-column: 2; grid-row: 3 / span 2; align-content: start; }
+  #st-home .drop { min-height: 220px; }
+
+  /* Bibliothèque : grille de vidéos */
+  #lib { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+  #lib-player-card { max-width: 1100px; }
+
+  /* Réglages : les cartes sur 2 colonnes */
+  #v-settings.on { columns: 2; column-gap: 20px; }
+  #v-settings > h1, #v-settings > .lede { column-span: all; }
+  #v-settings > .card, #v-settings > #save { break-inside: avoid; }
+  #v-settings > #save { margin-bottom: 14px; }
+  #v-settings > .card[style] { margin-top: 0 !important; }
+}
+@media (min-width: 1700px) { #v-settings.on { columns: 3; } }
+
 .sep-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: -4px 0 14px; font-size: 13px; color: var(--muted); }
