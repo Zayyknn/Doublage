@@ -255,7 +255,8 @@ async function upload(file, onProgress) {
     }
     if (!res) throw new Error("Connexion perdue pendant l'envoi");
     if (res.status === 401) { location.href = "/login"; return; }
-    const data = await res.json();
+    let data;   // une page d'erreur au lieu d'une réponse (serveur arrêté, accès distant coupé) : message clair
+    try { data = await res.json(); } catch { throw new Error("L'ordinateur ne répond pas : vérifie qu'il est allumé et que l'appli est ouverte."); }
     if (!res.ok && res.status !== 409) throw new Error(data.detail || "Envoi refusé");
     offset = data.size;
     onProgress(offset / file.size);
