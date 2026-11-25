@@ -43,7 +43,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Install if needed, then start VideoLingo")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--api", action="store_true", help="start the local HTTP API instead of the web UI")
-    mode.add_argument("--web", action="store_true", help="start @Raphicollas, the web app for PC and phone")
+    mode.add_argument("--web", action="store_true", help="start Studio Rythmo, the web app for PC and phone")
     mode.add_argument("--voix", action="store_true", help="install the optional local voices (Kokoro, Chatterbox)")
     mode.add_argument("--streamlit", action="store_true", help="start the original VideoLingo interface (advanced settings)")
     mode.add_argument("--check", action="store_true", help="check the environment without installing or launching")
@@ -80,7 +80,7 @@ def main() -> int:
         return 1
 
     if args.install_only:
-        print("@Raphicollas est installé.")
+        print("Studio Rythmo est installé.")
         return 0
     if args.voix:
         command = ["installer_voix.py"]
@@ -88,7 +88,7 @@ def main() -> int:
         command = ["api.py"]
     elif args.streamlit:
         command = ["-m", "streamlit", "run", "st.py"]
-    else:  # @Raphicollas : l'application web, par défaut
+    else:  # Studio Rythmo : l'application web, par défaut
         command = ["web.py"]
     return subprocess.run([str(python), *command], cwd=ROOT).returncode
 

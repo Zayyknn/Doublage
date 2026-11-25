@@ -25,7 +25,7 @@ jobs:
         with:
           tag_name: v${{ inputs.version }}
           target_commitish: ${{ github.sha }}
-          name: "@Raphicollas ${{ inputs.version }}"
+          name: Studio Rythmo ${{ inputs.version }}
           make_latest: true
           body: |
             Disponible dans l'appli : bouton **Mettre à jour** (pastille rouge sur Réglages).
@@ -46,7 +46,7 @@ jobs:
         shell: pwsh
         run: |
           Get-ChildItem dist | Format-Table Name, Length
-          if (-not (Test-Path dist\Raphicollas-Setup.exe)) { exit 1 }
+          if (-not (Test-Path dist\StudioRythmo-Setup.exe)) { exit 1 }
           if (-not (Test-Path dist\JoueTaReplique\JoueTaReplique.exe)) { exit 1 }
           if (-not (Test-Path dist\JoueTaReplique\_internal\app\web.py)) { exit 1 }
           if (-not (Test-Path dist\JoueTaReplique\_internal\uv.exe)) { exit 1 }
@@ -54,7 +54,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: JoueTaReplique-Windows
-          path: dist/Raphicollas-Setup.exe
+          path: dist/StudioRythmo-Setup.exe
 
   mac:
     runs-on: macos-15     # puces Apple (M1, M2, M3, M4…)
@@ -71,24 +71,24 @@ jobs:
         run: python launcher/build.py
       - name: Image disque (.dmg)
         run: |
-          APP="dist/@Raphicollas.app"
+          APP="dist/Studio Rythmo.app"
           test -d "$APP"
           test -f "$APP/Contents/Resources/app/web.py" || test -f "$APP/Contents/Frameworks/app/web.py"
           mkdir -p dmg && cp -R "$APP" dmg/
           tiffutil -cathidpicheck launcher/dmg-background.png launcher/dmg-background@2x.png -out dmg-background.tiff
           for i in 1 2 3; do
-            create-dmg --volname "@Raphicollas" --volicon launcher/icon.icns --background dmg-background.tiff \
+            create-dmg --volname "Studio Rythmo" --volicon launcher/icon.icns --background dmg-background.tiff \
               --window-pos 200 160 --window-size 660 420 --icon-size 110 --text-size 13 \
-              --icon "@Raphicollas.app" 165 235 --hide-extension "@Raphicollas.app" --app-drop-link 495 235 \
-              --no-internet-enable "dist/Raphicollas-Mac.dmg" dmg/ && break
+              --icon "Studio Rythmo.app" 165 235 --hide-extension "Studio Rythmo.app" --app-drop-link 495 235 \
+              --no-internet-enable "dist/StudioRythmo-Mac.dmg" dmg/ && break
             sleep 10
           done
           ls -la dist
-          test -f "dist/Raphicollas-Mac.dmg"
+          test -f "dist/StudioRythmo-Mac.dmg"
       - uses: actions/upload-artifact@v4
         with:
           name: JoueTaReplique-Mac
-          path: dist/Raphicollas-Mac.dmg
+          path: dist/StudioRythmo-Mac.dmg
 
   release:
     needs: [code, windows, mac]
@@ -103,11 +103,11 @@ jobs:
         with:
           tag_name: v${{ inputs.version }}
           target_commitish: ${{ github.sha }}
-          name: "@Raphicollas ${{ inputs.version }}"
+          name: Studio Rythmo ${{ inputs.version }}
           make_latest: true
           files: out/*
           body: |
-            **Windows** : télécharge `Raphicollas-Setup.exe` et lance-le.
-            **Mac** (M1, M2, M3, M4…) : ouvre `Raphicollas-Mac.dmg` et glisse @Raphicollas dans Applications.
+            **Windows** : télécharge `StudioRythmo-Setup.exe` et lance-le.
+            **Mac** (M1, M2, M3, M4…) : ouvre `StudioRythmo-Mac.dmg` et glisse Studio Rythmo dans Applications.
 
-            Au premier lancement, @Raphicollas installe son moteur (10 à 20 minutes, une seule fois).
+            Au premier lancement, Studio Rythmo installe son moteur (10 à 20 minutes, une seule fois).
