@@ -92,12 +92,14 @@ def _build(project_dir: Path, title: str):
     # Ambiance sans les voix : BS-RoFormer sur le son d'origine en pleine qualité. La séparation Demucs de la
     # transcription (mono, 32 kHz, MP3) ne sert plus que de repli.
     ambiance, vocals, separation = Path(_BACKGROUND_AUDIO_FILE), Path(_VOCAL_AUDIO_FILE), "demucs"
+    separation_error = None
     try:
         hq_ambiance, hq_vocals = project_dir / "_ambiance.wav", project_dir / "_vocals.wav"
         core.separate_voices(media, hq_ambiance, hq_vocals)
         ambiance, vocals, separation = hq_ambiance, hq_vocals, "roformer"
     except Exception as exc:
-        print(f"Séparation haute qualité impossible, repli sur Demucs : {exc}")
+        separation_error = f"{type(exc).__name__}: {exc}"[:300]  # affiché dans Mixage : le repli ne doit pas passer inaperçu
+        print(f"Séparation haute qualité impossible, repli sur Demucs : {separation_error}")
     core.ffmpeg("-i", str(project_dir / "original.mp4"), "-i", str(ambiance), "-map", "0:v:0", "-map", "1:a:0",
                 "-c:v", "copy", "-c:a", "aac", "-b:a", "256k", "-shortest", "-movflags", "+faststart",
                 str(project_dir / "ambiance.mp4"))
@@ -114,6 +116,7 @@ def _build(project_dir: Path, title: str):
     write(project_dir, "clips.json", [])
     duration = float(core.probe(project_dir / "original.mp4", "v:0", "format=duration") or 0) or None
     write(project_dir, "meta.json", {"title": title, "created": time.time(), "duration": duration, "separation": separation,
+                                     **({"separation_error": separation_error} if separation_error else {}),
                                      "speakers": core.speakers_meta(1), "latency_ms": 0,
                                      "mix": {"voice": 1.2, "ambience": 1.0, "keep_original": True, "original": 1.0}})
 
@@ -263,9 +266,14 @@ def reseparate(project_id: str):
             with lock:
                 meta = read(path, "meta.json", {})
                 meta["separation"] = "roformer"
+                meta.pop("separation_error", None)
                 write(path, "meta.json", meta)
         except Exception as exc:
-            job["error"] = f"Retrait des voix impossible : {exc}"
+            job["error"] = f"Retrait des voix impossible : {type(exc).__name__}: {exc}"[:400]
+            with lock:
+                meta = read(path, "meta.json", {})
+                meta["separation_error"] = job["error"]
+                write(path, "meta.json", meta)
         finally:
             for tmp in (hq_ambiance, hq_vocals, path / "ambiance.new.mp4", path / "vocals.new.m4a"):
                 tmp.unlink(missing_ok=True)

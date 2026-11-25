@@ -48,8 +48,9 @@ SEPARATION_MODEL = "model_bs_roformer_ep_317_sdr_12.9755.ckpt"   # BS-RoFormer (
 
 def separate_voices(media: Path, ambiance_wav: Path, vocals_wav: Path):
     """Sépare voix et ambiance sur le son d'origine en pleine qualité (stéréo 44,1 kHz)."""
+    os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")  # Mac : une opération absente du GPU Apple passe au processeur au lieu d'échouer
     from audio_separator.separator import Separator
-    work = ambiance_wav.parent / "_separation"
+    work =ambiance_wav.parent / "_separation"
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
     try:

@@ -544,8 +544,11 @@
   };
   // ------------------------------------------------------------ refaire le retrait des voix
   function sepInfo() {
-    $("#st-sep-info").textContent = proj.separation === "roformer" ? "Voix retirées en haute qualité"
-      : "Voix retirées avec l'ancienne méthode : des voix peuvent rester";
+    $("#st-sep-info").textContent = proj.separation === "roformer" ? "Voix retirées en haute qualité (BS-RoFormer)"
+      : "Voix retirées avec l'ancienne méthode (Demucs) : des voix restent";
+    const err = proj.separation_error && proj.separation !== "roformer";
+    $("#st-sep-status").classList.toggle("hidden", !err);
+    if (err) $("#st-sep-status").textContent = "Le moteur haute qualité a échoué : " + proj.separation_error;
   }
   $("#st-sep-go").onclick = async () => {
     stopAll();
