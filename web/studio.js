@@ -386,6 +386,8 @@
   function buttons() {
     const busy = mode !== "idle";
     $("#st-stop").classList.toggle("hidden", !busy);
+    $("#st-pause").classList.toggle("hidden", !(mode === "play" || mode === "orig"));  // pas de pause pendant une prise
+    $("#st-pause").textContent = "⏸ Pause";
     ["#st-orig", "#st-play", "#st-record", "#st-prev", "#st-next"].forEach((s) => $(s).classList.toggle("hidden", busy));
   }
   function swapSource(name) {
@@ -489,6 +491,17 @@
   $("#st-orig").onclick = () => play("orig");
   $("#st-play").onclick = () => play("play");
   $("#st-stop").onclick = () => stopAll();
+  function togglePause() {      // pause / reprise sans perdre ce qu'on écoute (Original ou Écouter)
+    if (mode !== "play" && mode !== "orig") return;
+    if (video.paused) { video.play().catch(() => {}); $("#st-pause").textContent = "⏸ Pause"; }
+    else { video.pause(); $("#st-pause").textContent = "▶ Reprendre"; }
+  }
+  $("#st-pause").onclick = togglePause;
+  document.addEventListener("keydown", (e) => {   // barre d'espace : pause / reprise (pas pendant qu'on tape un texte)
+    if (e.code !== "Space" || !proj || $("#st-editor").classList.contains("hidden")) return;
+    if (/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(document.activeElement.tagName)) return;
+    if (mode === "play" || mode === "orig") { e.preventDefault(); togglePause(); }
+  });
   video.addEventListener("ended", () => stopAll());
 
   // répliques de la personne choisie
@@ -807,10 +820,11 @@
     return { x, y, row, box: boxes.find((b) => b.row === row && x >= b.x0 - 3 && x <= b.x1 + 3),
              tag: tagBoxes.find((b) => b.row === row && x >= b.x0 - 3 && x <= b.x1 + 3) };
   }
-  // Ce qui part avec le mot attrapé : lui et la fin de sa phrase dans la réplique (« Aller » emmène « Aller, aller. »).
-  // L'étiquette du personnage emmène toute la réplique.
+  // Ce qui part : le mot attrapé seul ; avec Maj, lui et la fin de sa phrase (« Aller » emmène « Aller, aller. ») ;
+  // l'étiquette du personnage emmène toute la réplique.
   function dragSet(h) {
     if (h.tag) return { line: h.tag.line, set: new Set(h.tag.line.words) };
+    if (!h.shift) return { line: null, set: new Set([h.box.k]) };   // par défaut : ce mot seulement
     const line = lines.find((l) => l.words.includes(h.box.k)), set = new Set();
     for (const j of line.words.slice(line.words.indexOf(h.box.k))) {
       set.add(j);
@@ -823,6 +837,7 @@
     const h = hit(e);
     if (!h.box && !h.tag) return;
     const from = h.tag ? h.tag.row : h.box.row;
+    h.shift = e.shiftKey;
     drag = { ...dragSet(h), from, y: h.y, row: from, moved: false };
     band.setPointerCapture(e.pointerId);
     e.preventDefault();
