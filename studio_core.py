@@ -41,7 +41,10 @@ def speakers_meta(count: int, previous: list | None = None) -> list:
 
 # ------------------------------------------------------------------ retrait des voix (ambiance seule)
 
-SEPARATION_MODEL = "model_bs_roformer_ep_317_sdr_12.9755.ckpt"   # BS-RoFormer (viperx) : mesuré sur un dialogue
+SEPARATION_MODEL = "UVR-MDX-NET-Inst_HQ_4.onnx"   # MDX-Net Inst HQ 4 : mesuré sur un dialogue (voix normale + téléphone)
+# mêlé de bruitages, sur processeur : 8,7 s pour 42 s de vidéo et -51 / -49 dB de voix restante, contre 66 s et
+# -50 / -48 dB pour BS-RoFormer (ancien choix), 176 s pour MDX23C. Modèle de 56 Mo au lieu de 640 Mo.
+OLD_SEPARATION_MODEL = "model_bs_roformer_ep_317_sdr_12.9755.ckpt"   # BS-RoFormer (viperx) : mesuré sur un dialogue
 # mêlé à de la musique, il reste -28 dB de dialogue dans l'ambiance en moyenne (-11 dB au pire passage),
 # contre -21 dB (-4 dB au pire, les « ah » qu'on entend) avec Demucs htdemucs.
 
