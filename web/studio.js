@@ -393,18 +393,37 @@
   function swapSource(name) {
     const t = video.currentTime || 0;
     if (video.src.endsWith(url(name))) return Promise.resolve();
-    return new Promise((ok) => {
+    return new Promise((ok, fail) => {
+      const done = (err) => { clearTimeout(timer); video.onloadedmetadata = video.onerror = null; err ? fail(err) : ok(); };
+      const timer = setTimeout(() => done(new Error(`la piste ${name} ne se charge pas`)), 20000);
+      video.onloadedmetadata = () => { video.currentTime = t; done(); };
+      video.onerror = () => done(new Error(`la piste ${name} est illisible`));
       video.src = url(name);
-      video.addEventListener("loadedmetadata", () => { video.currentTime = t; ok(); }, { once: true });
+    });
+  }
+  // Safari (la fenêtre de l'appli sur Mac) refuse de lancer un son qui ne part pas pendant le clic : après la
+  // présentation (3 à 6 s) la lecture était refusée et rien ne se passait. Un play() pendant le clic débloque
+  // chaque lecteur pour la suite.
+  function unlockMedia() {
+    if (proj) proj.clips.forEach(audioFor);   // les prises aussi : leurs lecteurs existent dès maintenant
+    [video, vocals, ...pool.values()].forEach((m) => {
+      if (m.dataset.unlocked) return;
+      const wasMuted = m.muted; m.muted = true;
+      const p = m.play();
+      const back = (ok) => { if (ok) m.dataset.unlocked = "1"; if (m !== video || mode === "idle" || mode === "intro") m.pause(); m.muted = wasMuted; };
+      if (p && p.then) p.then(() => back(true), () => back(false)); else back(true);
     });
   }
   async function play(kind) {
+    unlockMedia();
     stopAll();
-    await swapSource(kind === "orig" ? "original.mp4" : "ambiance.mp4");
+    try { await swapSource(kind === "orig" ? "original.mp4" : "ambiance.mp4"); }
+    catch (e) { return D.toast("Lecture impossible : " + e.message, 6000); }
     if (video.duration && video.currentTime >= video.duration - 0.1) video.currentTime = 0;
     mode = kind; buttons();
     if (video.currentTime < 0.3 && $("#st-intro-auto").checked && (!(await intro()) || mode !== kind)) return;
-    try { await video.play(); } catch { stopAll(); }
+    try { await video.play(); }
+    catch (e) { stopAll(); D.toast("Lecture refusée (" + (e.name || e.message) + "). Reclique sur Écouter.", 6000); }
   }
 
   // ------------------------------------------------------------ présentation : logo puis les personnages
@@ -523,6 +542,7 @@
     return "";
   }
   $("#st-record").onclick = async () => {
+    unlockMedia();
     stopAll();
     try {
       stream = stream && stream.active ? stream : await navigator.mediaDevices.getUserMedia({
