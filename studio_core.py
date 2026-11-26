@@ -262,6 +262,35 @@ def sentences(words: list[dict], max_len: float = 6.0) -> list[tuple[float, floa
 
 
 QUESTIONS: dict = {}  # (début, fin) d'une phrase -> elle se termine par une question (rempli par sentences)
+DEBUG = None    # banc d'essai : liste où noter les groupes avant le rattachement des petits
+TURN = 1        # deux moitiés d'une « phrase » qui se ressemblent moins que ça : deux personnes (1 = jamais coupé).
+                # Coupé : +4 points de mots justes quand la ponctuation se perd, mais un mauvais compte plus souvent.
+TURN_SIDE = 0.8  # chaque moitié dure au moins ça (en dessous, l'empreinte ne veut rien dire)
+
+
+def split_turns(spans, words, embed):
+    """Une transcription qui oublie un point colle deux répliques de deux personnes en une « phrase » : on la coupe
+    entre deux mots là où les deux moitiés ont le moins la même voix, si elles se ressemblent vraiment peu."""
+    out = []
+    stack = list(spans)
+    while stack:
+        s, e = stack.pop()
+        inside = [w for w in words if s - 0.01 <= w["s"] and w["e"] <= e + 0.01]
+        cuts = [(inside[k - 1]["e"], inside[k]["s"]) for k in range(1, len(inside))
+                if inside[k - 1]["e"] - s >= TURN_SIDE and e - inside[k]["s"] >= TURN_SIDE]
+        best = None
+        for a, b in cuts:
+            sim = float(embed(s, a) @ embed(b, e))
+            if best is None or sim < best[0]:
+                best = (sim, a, b)
+        if best and best[0] < TURN:
+            q = QUESTIONS.pop((s, e), False)
+            QUESTIONS[(s, best[1])] = False
+            QUESTIONS[(best[2], e)] = q
+            stack += [(s, best[1]), (best[2], e)]
+        else:
+            out.append((s, e))
+    return sorted(out)
 
 
 def voices_by_sentence(words, samples, rate, extractor, num: int = -1) -> list[tuple[float, float, int]]:
@@ -279,6 +308,8 @@ def voices_by_sentence(words, samples, rate, extractor, num: int = -1) -> list[t
     spans = sentences(words)
     if not spans:
         return []
+    if TURN < 1:
+        spans = split_turns(spans, words, embed)
     vecs = [embed(s, e) if e - s >= 0.25 else None for s, e in spans]
     solid = [i for i, (s, e) in enumerate(spans) if e - s >= SOLID and vecs[i] is not None]
     if len(solid) < 2:
@@ -338,10 +369,21 @@ def voices_by_sentence(words, samples, rate, extractor, num: int = -1) -> list[t
         v = np.mean([vecs[i] for i in g], axis=0)
         return v / (np.linalg.norm(v) or 1)
 
+    if DEBUG is not None:
+        talk = [sum(spans[i][1] - spans[i][0] for i in g) for g in groups]
+        for k, g in enumerate(groups):
+            others = [float(centroid(g) @ centroid(h)) for o, h in enumerate(groups) if o != k]
+            DEBUG.append((round(talk[k], 1), len(g), round(max(others), 3) if others else None,
+                          [spans[i] for i in g]))
     if num <= 0:  # une « personne » qui parle moins de MIN_SPEECH s en tout : rattachée à la voix la plus proche.
         while len(groups) > 1:  # Une seule phrase peut être un vrai personnage (Scary Movie : le copain qui crie « À l'aide ! »)
             talk = [sum(spans[i][1] - spans[i][0] for i in g) for g in groups]
-            weak = [k for k, g in enumerate(groups) if talk[k] < MIN_SPEECH]
+            # Un petit rôle qui ne ressemble à aucune autre voix reste un personnage (OSS 117 : l'homme à favoris,
+            # 2 s en tout) ; un petit morceau qui ressemble à une voix déjà là n'est qu'un bout de celle-ci.
+            near = [max((float(centroid(g) @ centroid(h)) for o, h in enumerate(groups) if o != k), default=0)
+                    for k, g in enumerate(groups)]
+            weak = [k for k, g in enumerate(groups)
+                    if talk[k] < MIN_SPEECH or (talk[k] < SMALL and near[k] >= SMALL_SIM)]
             if not weak:
                 break
             k = min(weak, key=lambda k: talk[k])
@@ -379,7 +421,9 @@ def voices_by_sentence(words, samples, rate, extractor, num: int = -1) -> list[t
 
 SAME_VOICE = 0.5       # ressemblance moyenne (cosinus) entre passages au-delà de laquelle c'est la même voix
                        # mesuré sur des passages de 1 à 4 s : même voix 0,5-0,9, voix différentes 0,1-0,35
-MIN_SPEECH = 2.5       # en dessous, en secondes, ce n'est pas une personne de plus : on la rattache à la plus proche
+MIN_SPEECH = 1.5       # en dessous, en secondes, ce n'est pas une personne de plus : on la rattache à la plus proche
+SMALL = 4.0            # en dessous, une voix qui ressemble à une autre (≥ SMALL_SIM) n'en est qu'un morceau
+SMALL_SIM = 0.38
 PIECE = 8.0            # longueur des morceaux analysés, en secondes (repli sans texte)
 # Compte automatique des personnes, réglé sur un banc de 23 scènes (1 à 4 voix, voix proches, téléphone, écho,
 # bruit, Scary Movie réel) : 1. regroupement des empreintes recentrées jusqu'à SPLIT, 2. fusion des morceaux dont
