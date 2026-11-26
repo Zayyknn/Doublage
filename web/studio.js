@@ -65,17 +65,20 @@
     return ranges;
   }
   let wordRow = [];
-  function placeLines() {       // deux lignes : chaque personnage a sa ligne attitrée (1 en haut, 2 en bas, 3 en haut…) ;
-    const ends = [-1e9, -1e9];  // elle ne change que si elle est occupée à ce moment-là. Modifier une réplique ne rebrasse plus la suite.
+  // Une ligne de bande par personnage, dans l'ordre de la liste : changer le personnage d'une réplique (panneau
+  // Texte ou glisser) la fait passer sur la ligne de ce personnage, au même moment.
+  const rowOf = (sp) => Math.max(0, proj.speakers.findIndex((s) => s.id === sp));
+  function placeLines() {
     wordRow = new Array(proj.words.length).fill(0);
     for (const l of lines) {
-      const pref = ROWS() > 1 ? l.sp % 2 : 0;
-      const r = ends[pref] <= l.s - 0.15 || ends[1 - pref] > l.s - 0.15 ? pref : 1 - pref;
-      l.row = r; ends[r] = Math.max(ends[r], l.e);
-      l.words.forEach((k) => (wordRow[k] = r));
+      l.row = rowOf(l.sp);
+      l.words.forEach((k) => (wordRow[k] = l.row));
     }
   }
-  function refresh() { parts = keptParts(proj.clips); lines = buildLines(proj.words); keep = keepRanges(); placeLines(); }
+  function refresh() {
+    parts = keptParts(proj.clips); lines = buildLines(proj.words); keep = keepRanges(); placeLines();
+    if (W && band.clientHeight !== ROWS() * laneH()) resize();   // nombre de personnages changé : autant de lignes
+  }
 
   // ------------------------------------------------------------ accueil
   D.LANGS.forEach(([c, n]) => $("#st-lang").insertAdjacentHTML("beforeend", `<option value="${c}">${n}</option>`));
@@ -219,10 +222,14 @@
   // ------------------------------------------------------------ bande rythmo
   let W = 0, H = 0, DPR = 1;
   const tv = () => document.fullscreenElement === $("#st-tv");
-  const ROWS = () => (proj && proj.speakers.length > 1 ? 2 : 1);
-  function laneH() {
+  const ROWS = () => (proj ? Math.max(1, proj.speakers.length) : 1);
+  function baseLane() {         // hauteur d'une ligne quand il y en a deux (la vitesse de défilement en dépend)
     const base = W && W < 600 ? 54 : 74;
     return tv() ? Math.round(base * Math.max(1.4, window.innerHeight / 640)) : base;
+  }
+  function laneH() {            // plus de personnages : des lignes un peu moins hautes, la bande reste lisible
+    const base = baseLane(), n = ROWS();
+    return n <= 2 ? base : Math.max(Math.round(base * 0.62), Math.round(base * 2.4 / n));
   }
   function resize() {
     if (!proj) return;
@@ -256,15 +263,18 @@
     ctx.clearRect(0, 0, W, H);
     const t = clock();
     const lh = laneH();
-    const pps = lh * (W < 600 ? 3.6 : 4.4);    // pixels par seconde : assez vite pour que les mots tiennent sans se tasser
+    const pps = baseLane() * (W < 600 ? 3.6 : 4.4);  // pixels par seconde : assez vite pour que les mots tiennent sans se tasser
     const bar = Math.round(W * 0.33);
     const focus = mode === "record" || mode === "countdown";
     const fs = Math.round(lh * 0.5);
     const textY = (r) => r * lh + lh * 0.54;
 
-    // deux lignes sombres
-    for (let r = 0; r < ROWS(); r++) { ctx.fillStyle = r ? "#2c2f36" : "#32353d"; ctx.fillRect(0, r * lh, W, lh); }
-    if (ROWS() > 1) { ctx.fillStyle = "#1d1f24"; ctx.fillRect(0, lh - 1, W, 2); }
+    // une ligne sombre par personnage, avec sa couleur sur le bord gauche
+    for (let r = 0; r < ROWS(); r++) {
+      ctx.fillStyle = r % 2 ? "#2c2f36" : "#32353d"; ctx.fillRect(0, r * lh, W, lh);
+      if (r) { ctx.fillStyle = "#1d1f24"; ctx.fillRect(0, r * lh - 1, W, 2); }
+      if (ROWS() > 1) { ctx.fillStyle = proj.speakers[r].color; ctx.fillRect(0, r * lh + 3, 4, lh - 6); }
+    }
     // ce qui est déjà enregistré : un trait sous les répliques concernées
     for (const p of parts) {
       for (const l of lines) {
@@ -873,20 +883,9 @@
     const { set, from, row } = drag;
     drag = null; band.style.cursor = "";
     if (row === from) return;
-    // Les mots vont au personnage de la ligne visée : celui qui y parle le plus près dans le temps,
-    // sinon celui dont c'est la ligne attitrée, sinon le premier autre personnage.
-    const ks = [...set].sort((a, b) => a - b), first = proj.words[ks[0]], lastW = proj.words[ks[ks.length - 1]];
-    const sp0 = first.sp;
-    let best = null, gap = 1e9;
-    for (const own of [true, false]) {          // d'abord les personnages dont c'est la ligne attitrée
-      for (const l of lines) {
-        if (l.row !== row || l.sp === sp0 || (own && l.sp % 2 !== row)) continue;
-        const g = Math.max(l.s - lastW.e, first.s - l.e, 0);
-        if (g < gap) { gap = g; best = l.sp; }
-      }
-      if (best !== null) break;
-    }
-    if (best === null) best = (proj.speakers.find((s) => s.id !== sp0 && s.id % 2 === row) || proj.speakers.find((s) => s.id !== sp0) || {}).id;
+    // Les mots vont au personnage de la ligne visée (une ligne par personnage)
+    const ks = [...set].sort((a, b) => a - b);
+    const best = (proj.speakers[row] || {}).id;
     if (best === undefined) return;
     ks.forEach((k) => (proj.words[k] = { ...proj.words[k], sp: best }));
     applyWords(proj.words, true);
