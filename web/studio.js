@@ -965,8 +965,15 @@
   const devWarn = (text) => { $("#st-dev-warn").textContent = text || ""; $("#st-dev-warn").classList.toggle("hidden", !text); };
   let meterCtx = null, meterSrc = null, meterRaf = 0;
 
+  let watchingDevices = false;
   async function listDevices() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    // Ancienne appli Mac : lister les appareils interroge aussi la caméra, et macOS ferme l'appli. Rien du tout.
+    if (macWindowWithoutCamera()) return;
+    if (!watchingDevices && navigator.mediaDevices.addEventListener) {
+      watchingDevices = true;
+      navigator.mediaDevices.addEventListener("devicechange", listDevices);
+    }
     const all = await navigator.mediaDevices.enumerateDevices();
     const fillSel = (sel, kind, none, chosen) => {
       const items = all.filter((d) => d.kind === kind && d.deviceId && d.deviceId !== "default" && d.deviceId !== "communications");
@@ -977,7 +984,6 @@
     fillSel($("#st-mic"), "audioinput", "Micro par défaut", prefs.mic);
     fillSel($("#st-camsel"), "videoinput", "Caméra par défaut", prefs.cam);
   }
-  if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener("devicechange", listDevices);
 
   // Le micro branché sur l'ordinateur (choisi dans la liste, sinon celui par défaut)
   async function micStream() {
@@ -1038,8 +1044,10 @@
   // Fenêtre de l'appli Mac installée avant la 1.5.4 : pas d'autorisation caméra dans l'application, et macOS la
   // ferme net dès qu'elle touche la webcam (crash « NSCameraUsageDescription »). On ne la demande pas : on propose
   // le navigateur, ou la nouvelle appli (DMG).
-  const macWindowWithoutCamera = () => !!window.pywebview && /Mac/i.test(navigator.platform || navigator.userAgent)
-    && !(window.pywebview.api && typeof window.pywebview.api.camera_ok === "function");
+  // (la fenêtre WebKit de l'appli n'a pas « Safari/ » dans son identité, contrairement à Safari et Chrome)
+  const macWindowWithoutCamera = () => /Mac/i.test(navigator.platform || navigator.userAgent)
+    && (!!window.pywebview || !/Safari\//.test(navigator.userAgent))
+    && !(window.pywebview && window.pywebview.api && typeof window.pywebview.api.camera_ok === "function");
   async function camStart() {
     if (macWindowWithoutCamera()) {
       $("#st-cam-on").checked = false; prefs.camOn = false; keepPrefs(); camLook();
@@ -1079,6 +1087,7 @@
   $("#st-cam-size").value = prefs.size || 24;
   function devicesOnOpen() {    // à l'ouverture d'une scène : la caméra revient si elle était allumée
     listDevices();
+    if (macWindowWithoutCamera()) { prefs.camOn = false; keepPrefs(); }   // jamais de caméra rallumée toute seule là
     $("#st-cam-on").checked = !!prefs.camOn;
     if (prefs.camOn && !cam) camStart(); else camLook();
   }
