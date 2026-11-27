@@ -1035,7 +1035,20 @@
     camBox.className = "cam " + (prefs.corner || "br") + ($("#st-cam-mirror").checked ? " mirror" : "") + (cam ? "" : " hidden");
     camBox.style.setProperty("--cam-w", (prefs.size || 24) + "%");
   }
+  // Fenêtre de l'appli Mac installée avant la 1.5.4 : pas d'autorisation caméra dans l'application, et macOS la
+  // ferme net dès qu'elle touche la webcam (crash « NSCameraUsageDescription »). On ne la demande pas : on propose
+  // le navigateur, ou la nouvelle appli (DMG).
+  const macWindowWithoutCamera = () => !!window.pywebview && /Mac/i.test(navigator.platform || navigator.userAgent)
+    && !(window.pywebview.api && typeof window.pywebview.api.camera_ok === "function");
   async function camStart() {
+    if (macWindowWithoutCamera()) {
+      $("#st-cam-on").checked = false; prefs.camOn = false; keepPrefs(); camLook();
+      devWarn("Ta version de l'appli Mac n'a pas le droit d'utiliser la caméra (macOS la fermerait). Installe la nouvelle appli : "
+        + "« StudioRythmo-Mac.dmg » sur la page de la dernière version (github.com/Zayyknn/Doublage/releases). En attendant, la webcam marche dans le navigateur.");
+      $("#st-dev-warn").insertAdjacentHTML("beforeend", ` <button class="btn small" id="st-open-browser" style="margin-top:8px">Ouvrir dans le navigateur</button>`);
+      $("#st-open-browser").onclick = () => window.pywebview.api.open_browser();
+      return;
+    }
     camStop(true);
     const video = { width: { ideal: 1280 }, height: { ideal: 720 } };
     if (prefs.cam) video.deviceId = { exact: prefs.cam };

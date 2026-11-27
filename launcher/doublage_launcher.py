@@ -344,6 +344,11 @@ def run_webview():
     state = {"ready": False, "window": None}
 
     class Api:
+        def camera_ok(self):
+            # La page n'allume la webcam dans la fenêtre Mac que si l'application a l'autorisation caméra
+            # (NSCameraUsageDescription, depuis la 1.5.4) : sans elle, macOS tue l'application.
+            return True
+
         def open_log(self):
             path = engine.log
             if WINDOWS:
