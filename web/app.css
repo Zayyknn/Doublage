@@ -224,6 +224,7 @@ nav.tabs button.on { color: var(--text); background: var(--glass-strong); }
 .wiz-dots i.on { background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
 .wiz-nav { display: flex; gap: 10px; margin-top: 18px; }
 .wiz-nav .btn.primary { flex: 1; width: auto; }
+.btn.primary.st-save { width: auto; padding: 8px 14px; font-size: 14px; }
 .choices { display: grid; gap: 10px; }
 .choice { text-align: left; font: inherit; color: var(--text); cursor: pointer; padding: 14px 16px; border-radius: 16px;
   background: rgba(255,255,255,.03); border: 1px solid var(--line); transition: .2s; display: flex; gap: 12px; align-items: flex-start; }
@@ -331,10 +332,11 @@ input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 
 
 /* Studio sur grand écran (Mac, PC, télé) : la vidéo et la bande en grand, les réglages sur le côté */
 @media (min-width: 1000px) {
-  .app:has(#v-studio.on #st-editor:not(.hidden)) { max-width: min(1680px, 100%); padding-left: 28px; padding-right: 28px; }
+  .app:has(#v-studio.on #st-editor:not(.hidden)), .app:has(#v-dub.on #st-editor:not(.hidden)) { max-width: min(1680px, 100%); padding-left: 28px; padding-right: 28px; }
   #st-editor:not(.hidden) { display: grid; grid-template-columns: minmax(0, 1fr) 380px; column-gap: 20px; align-items: start; grid-auto-flow: row dense; }
   #st-editor > * { grid-column: 2; }
   #st-editor > #st-back, #st-editor > #st-title, #st-editor > .notice { grid-column: 1 / -1; justify-self: start; }
+  #st-editor > .st-top { grid-column: 1 / -1; }
   #st-editor > .stage { grid-column: 1; grid-row: span 6; position: sticky; top: 16px; }
   #st-editor .screen video { max-height: max(260px, calc(100vh - var(--band-h, 130px) - 430px)); }
   /* pas de carte collante dans la colonne de droite : les cartes en verre se superposaient en défilant */
@@ -364,9 +366,9 @@ nav.tabs button { position: relative; }
   .nav-brand { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 17px; letter-spacing: -.02em; padding: 2px 8px 22px; }
   .nav-brand img { width: 30px; height: 30px; }
 
-  .app, .app:has(#v-studio.on #st-editor:not(.hidden)) { max-width: none; margin: 0 0 0 252px; padding: 28px 40px 40px; }
+  .app, .app:has(#v-studio.on #st-editor:not(.hidden)), .app:has(#v-dub.on #st-editor:not(.hidden)) { max-width: none; margin: 0 0 0 252px; padding: 28px 40px 40px; }
   .app > * { max-width: 1500px; }
-  .app > #v-studio:has(#st-editor:not(.hidden)) { max-width: 1900px; }
+  .app > #v-studio:has(#st-editor:not(.hidden)), .app > #v-dub:has(#st-editor:not(.hidden)) { max-width: 1900px; }
   header.top { position: absolute; top: 22px; right: 40px; z-index: 6; margin: 0; }  /* défile avec la page : ne recouvre plus les cartes */
   header.top .brand { display: none; }
   h1 { font-size: 34px; }
@@ -402,3 +404,25 @@ nav.tabs button { position: relative; }
 .sep-prog .sep-line { display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px; color: var(--text); }
 .sep-prog .progress { margin: 8px 0 0; }
 .sep-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: -4px 0 14px; font-size: 13px; color: var(--muted); }
+
+/* ---------------- Doubler (clients) : la même scène que le Studio, sans les outils de préparation */
+#st-editor.client .studio-only, #st-editor.imported .orig-only { display: none !important; }
+#st-editor.client .line textarea { pointer-events: none; }
+#db-scenes:empty::before { content: "Aucune scène pour l'instant : prépare-en une dans le Studio, ou importe un MP4."; color: var(--muted); font-size: 14px; }
+#db-scenes .tag { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 99px; background: rgba(139,92,246,.25); color: #d9ccff; margin-left: 6px; }
+#db-up { margin-top: 12px; }
+
+/* retour de la webcam, par-dessus la scène (et en plein écran télé) */
+.cam { position: absolute; z-index: 3; width: var(--cam-w, 24%); aspect-ratio: 4 / 3; border-radius: 12px; overflow: hidden;
+  background: #000; border: 2px solid rgba(255,255,255,.85); box-shadow: 0 8px 28px rgba(0,0,0,.55); }
+.cam.br { right: 12px; bottom: 12px; } .cam.bl { left: 12px; bottom: 12px; } .cam.tr { right: 12px; top: 12px; } .cam.tl { left: 12px; top: 12px; }
+.cam video { width: 100% !important; height: 100% !important; max-height: none !important; object-fit: cover; margin: 0; border-radius: 0; display: block; }
+.cam.mirror video { transform: scaleX(-1); }
+.cam-btn { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border-radius: 50%; border: 0; background: rgba(0,0,0,.55); color: #fff;
+  font-size: 15px; cursor: pointer; opacity: 0; transition: opacity .2s; }
+.cam:hover .cam-btn { opacity: 1; }
+.meter { height: 8px; border-radius: 99px; background: rgba(255,255,255,.1); overflow: hidden; margin: 2px 0 10px; }
+.meter i { display: block; height: 100%; width: 0; border-radius: 99px; background: linear-gradient(90deg, #3ddc84, #ffd23f 70%, #ff3b4f); transition: width .08s linear; }
+#st-editor.client .line select { pointer-events: none; }
+#st-editor.imported .transport { grid-template-columns: auto 1fr auto; }
+@media (min-width: 760px) { #st-editor.imported .transport { grid-template-columns: auto 1fr auto 1.4fr; } }

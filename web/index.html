@@ -28,8 +28,34 @@
   </header>
   <div class="upd-veil hidden" id="upd-veil"><div class="glass card"><h2>Mise à jour</h2><p id="upd-msg">Téléchargement…</p><div class="upd-bar"><i></i></div></div></div>
 
-  <!-- ============================== DOUBLER ============================== -->
+  <!-- ============================== DOUBLER (clients) ============================== -->
   <section class="view on" id="v-dub">
+    <div id="db-home">
+      <h1>Doubler</h1>
+      <p class="lede">Choisis une scène préparée dans le Studio, ou importe un MP4 sans les voix. Branche ton micro, allume ta caméra, et à toi de jouer.</p>
+
+      <div class="glass card">
+        <h2>Importer une scène</h2>
+        <label class="drop" id="db-drop">
+          <input type="file" id="db-file" accept="video/mp4,video/*,.mp4,.mov,.mkv" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg>
+          <strong id="db-drop-title">Choisir un MP4</strong>
+          <small id="db-drop-sub">La scène exportée du Studio (avec sa bande rythmo) ou n'importe quelle vidéo déjà sans voix · ou glisse-la ici</small>
+        </label>
+        <div class="status hidden" id="db-up"><div class="sep-prog"><div class="sep-line"><span id="db-up-step">Envoi…</span><b id="db-up-pct">0 %</b></div>
+          <div class="progress"><div id="db-up-bar"></div></div></div></div>
+      </div>
+
+      <div class="glass card">
+        <h2>Scènes prêtes</h2>
+        <div class="lib" id="db-scenes"></div>
+      </div>
+    </div>
+    <div id="db-editor-slot"></div>
+  </section>
+
+  <!-- ============================== DOUBLAGE AUTOMATIQUE (ancien onglet, gardé hors du menu) ============================== -->
+  <section class="view" id="v-auto">
     <h1>Double une vidéo</h1>
     <p class="lede">Un fichier ou un lien YouTube, une langue, une voix. Le reste est automatique.</p>
 
@@ -154,7 +180,10 @@
     </div>
 
     <div id="st-editor" class="hidden">
-      <button class="btn small ghost" id="st-back" style="margin-bottom:12px">← Vidéos</button>
+      <div class="st-top" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn small ghost" id="st-back">← Vidéos</button>
+        <button class="btn small st-save studio-only" title="Ctrl+S / ⌘S">✓ Modifications enregistrées</button>
+        <a class="btn small ghost studio-only" id="st-export" title="Le MP4 sans les voix, avec sa bande rythmo, à importer dans l'onglet Doubler">⬇ Exporter la scène (MP4 à doubler)</a></div>
       <h1 id="st-title" style="font-size:24px"></h1>
       <div class="notice warn hidden" id="st-mic-warn"></div>
       <div class="notice warn hidden" id="st-sp-warn"></div>
@@ -168,6 +197,8 @@
               <div class="intro-cast hidden"><h2></h2><div class="cast"></div></div>
             </div>
             <div class="rec-dot hidden" id="st-rec"><i></i>REC</div>
+            <div class="cam hidden" id="st-cam-box"><video id="st-cam" playsinline muted autoplay></video>
+              <button class="cam-btn" id="st-cam-move" title="Changer de coin">⤡</button></div>
           </div>
           <canvas id="st-band" class="band"></canvas>
         </div>
@@ -177,7 +208,7 @@
 
         <div class="transport">
           <button class="btn small icon" id="st-prev" title="Réplique précédente">⏮</button>
-          <button class="btn small" id="st-orig" title="La scène d'origine, pour apprendre le rythme">▶ Original</button>
+          <button class="btn small orig-only" id="st-orig" title="La scène d'origine, pour apprendre le rythme">▶ Original</button>
           <button class="btn small" id="st-play" title="Sans les voix d'origine, avec vos prises">▶ Écouter</button>
           <button class="btn small icon" id="st-next" title="Réplique suivante">⏭</button>
           <button class="btn rec" id="st-record"><i></i>Enregistrer</button>
@@ -190,19 +221,32 @@
         </div>
         <label class="toggle" style="margin-top:6px"><span>Présentation au début<small>Logo puis les personnages quand on part du début de la vidéo</small></span>
           <span class="switch"><input type="checkbox" id="st-intro-auto" checked><i></i></span></label>
-        <label class="toggle" style="margin-top:6px"><span>Voix d'origine en fond<small>Un guide discret dans tes écouteurs pendant que tu enregistres</small></span>
+        <label class="toggle orig-only" style="margin-top:6px"><span>Voix d'origine en fond<small>Un guide discret dans tes écouteurs pendant que tu enregistres</small></span>
           <span class="switch"><input type="checkbox" id="st-guide"><i></i></span></label>
         <p class="hint" style="text-align:center;margin:4px 0 0">L'enregistrement part de l'endroit où tu es. Mets des écouteurs.</p>
       </div>
 
-      <div class="glass card text-card">
-        <h2>Texte</h2>
-        <p class="hint" style="margin-top:0">Prépare ta vidéo : corrige les mots ou change le personnage, la bande suit tout de suite. Sur la bande, chaque personnage a sa ligne : glisse un mot sur la ligne d'un autre personnage pour le lui donner. Maj + glisser emmène la fin de sa phrase ; glisser l'étiquette du personnage déplace toute la réplique.</p>
-        <div class="lines" id="st-lines"></div>
-        <div class="btns" style="margin-top:12px"><button class="btn small ghost danger" id="st-delete">Supprimer la vidéo</button></div>
+      <div class="glass card devices">
+        <h2>Micro et caméra</h2>
+        <label class="field"><span>Micro</span><select id="st-mic"><option value="">Micro par défaut</option></select></label>
+        <div class="meter" title="Niveau du micro"><i id="st-meter"></i></div>
+        <button class="btn small" id="st-mic-test">🎙 Tester le micro</button>
+        <label class="field" style="margin-top:12px"><span>Caméra</span><select id="st-camsel"><option value="">Caméra par défaut</option></select></label>
+        <label class="toggle"><span>Retour de la webcam<small>Ton image par-dessus la scène, aussi en plein écran</small></span>
+          <span class="switch"><input type="checkbox" id="st-cam-on"><i></i></span></label>
+        <label class="toggle"><span>Effet miroir</span><span class="switch"><input type="checkbox" id="st-cam-mirror" checked><i></i></span></label>
+        <label class="field"><span>Taille de l'image</span><input type="range" id="st-cam-size" min="14" max="45" step="1" value="24"></label>
+        <div class="notice warn hidden" id="st-dev-warn"></div>
       </div>
 
-      <div class="glass card">
+      <div class="glass card text-card">
+        <h2>Texte</h2>
+        <p class="hint studio-only" style="margin-top:0">Prépare ta vidéo : corrige les mots ou change le personnage, la bande suit tout de suite. Sur la bande, chaque personnage a sa ligne : glisse un mot sur la ligne d'un autre personnage pour le lui donner. Maj + glisser emmène la fin de sa phrase ; glisser l'étiquette du personnage déplace toute la réplique.</p>
+        <div class="lines" id="st-lines"></div>
+        <div class="btns" style="margin-top:12px"><button class="btn small st-save" title="Ctrl+S / ⌘S">✓ Modifications enregistrées</button><button class="btn small ghost danger studio-only" id="st-delete">Supprimer la vidéo</button></div>
+      </div>
+
+      <div class="glass card studio-only">
         <h2>Personnes</h2>
         <div id="st-people"></div>
         <div class="recount">
@@ -221,7 +265,7 @@
 
       <div class="glass card">
         <h2>Mixage</h2>
-        <div class="sep-row"><span id="st-sep-info">Retrait des voix</span>
+        <div class="sep-row studio-only"><span id="st-sep-info">Retrait des voix</span>
           <button class="btn small" id="st-sep-go">Refaire le retrait des voix</button></div>
         <div class="status hidden" id="st-sep-status"></div>
         <label class="field"><span>Calage des voix <b id="st-lat-val">0 ms</b></span>

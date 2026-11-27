@@ -178,11 +178,24 @@
   }
 
   // ------------------------------------------------------------ ouvrir une vidéo
-  async function open(id) {
+  // L'éditeur sert aux deux onglets : Studio (préparation complète) et Doubler (les clients : la scène, la bande,
+  // le micro et la caméra, sans les outils de préparation). Il est déplacé dans l'onglet qui l'ouvre.
+  let client = false;
+  const editor = $("#st-editor");
+  async function open(id, opts) {
     let next;
     try { next = await D.api(`/api/studio/${encodeURIComponent(id)}`); } catch (e) { return D.toast(e.message); }
     if (proj) stopAll();
+    client = !!(opts && opts.client);
+    if (client) { $("#db-editor-slot").appendChild(editor); $("#db-home").classList.add("hidden"); }
+    else if (editor.parentElement !== $("#v-studio")) $("#v-studio").appendChild(editor);
+    editor.classList.toggle("client", client);
+    editor.classList.toggle("imported", !!next.imported);
+    $("#st-back").textContent = client ? "← Scènes" : "← Vidéos";
+    $("#st-export").href = `/api/studio/${encodeURIComponent(id)}/export`;
+    $("#st-export").setAttribute("download", "");
     proj = next;
+    dirty = false; saveState();
     proj.speakers.forEach((s) => (s.color = PALETTE[s.id % PALETTE.length]));
     pool.forEach((a) => a.pause()); pool.clear();
     portraits = new Map(); grabPortraits(proj);
@@ -205,11 +218,18 @@
     $("#st-sp-warn").classList.toggle("hidden", !proj.speakers_error);
     $("#st-sp-warn").textContent = proj.speakers_error || "";
     sepInfo();
+    devicesOnOpen();
     if (proj.job && proj.job.running) (proj.job.kind === "separate" ? watchSep() : watchJob());
     window.scrollTo({ top: 0 });
     resize();
   }
-  $("#st-back").onclick = () => { stopAll(); $("#st-editor").classList.add("hidden"); $("#st-home").classList.remove("hidden"); loadProjects(); };
+  function closeEditor() {
+    stopAll(); camStop();
+    $("#st-editor").classList.add("hidden");
+    if (client) { $("#db-home").classList.remove("hidden"); loadScenes(); }
+    else { $("#st-home").classList.remove("hidden"); loadProjects(); }
+  }
+  $("#st-back").onclick = async () => { if (dirty) await saveNow(true); closeEditor(); };
 
   function renderAll() { renderWho(); renderPeople(); renderClips(); renderFinals(); renderLines(); resize(); }
 
@@ -555,8 +575,7 @@
     unlockMedia();
     stopAll();
     try {
-      stream = stream && stream.active ? stream : await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+      stream = await micStream();
     } catch {
       if (window.pywebview && confirm("Le micro n'est pas accessible dans cette fenêtre. Ouvrir Studio Rythmo dans ton navigateur pour enregistrer ?")) {
         window.pywebview.api.open_browser();
@@ -741,8 +760,41 @@
   async function save(data) {
     try {
       await D.api(`/api/studio/${encodeURIComponent(proj.id)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-    } catch (e) { D.toast(e.message); }
+      return true;
+    } catch (e) { dirty = true; saveState(); D.toast(e.message); return false; }
   }
+
+  // ------------------------------------------------------------ bouton Enregistrer
+  // Les modifications partent d'elles-mêmes après un court délai ; le bouton envoie tout tout de suite (texte en
+  // cours de frappe compris) et dit clairement si c'est enregistré.
+  let dirty = false;
+  function saveState(state) {
+    document.querySelectorAll(".st-save").forEach((b) => {
+      b.disabled = state === "saving";
+      b.textContent = state === "saving" ? "Enregistrement…" : dirty ? "💾 Enregistrer les modifications" : "✓ Modifications enregistrées";
+      b.classList.toggle("primary", dirty);
+    });
+  }
+  function markDirty() { dirty = true; saveState(); }
+  async function saveNow(quiet) {
+    if (!proj) return true;
+    const typing = document.activeElement;
+    if (typing && typing.matches("#st-lines textarea")) applyText(Number(typing.dataset.i), typing.value);
+    clearTimeout(saveTimer);
+    saveState("saving");
+    dirty = false;
+    const ok = await save({ words: proj.words, speakers: proj.speakers, latency_ms: Number($("#st-lat").value),
+      mix: { voice: Number($("#st-vgain").value), ambience: Number($("#st-again").value), keep_original: $("#st-keep").checked } });
+    saveState();
+    if (ok && !quiet) D.toast("Modifications enregistrées");
+    return ok;
+  }
+  document.querySelectorAll(".st-save").forEach((b) => (b.onclick = () => saveNow()));
+  document.addEventListener("keydown", (e) => {   // Ctrl+S / Cmd+S
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s" && proj && !$("#st-editor").classList.contains("hidden")) {
+      e.preventDefault(); saveNow();
+    }
+  });
 
   $("#st-render").onclick = async () => {
     const btn = $("#st-render");
@@ -789,6 +841,7 @@
       let timer = null;
       el.addEventListener("input", () => {        // le texte suit la frappe sur la bande
         grow(el);
+        markDirty();
         clearTimeout(timer);
         timer = setTimeout(() => applyText(Number(el.dataset.i), el.value), 400);
       });
@@ -820,8 +873,9 @@
     refresh();
     if (rerender) renderLines();
     renderPeople();
+    markDirty();
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => save({ words: proj.words }), 600);
+    saveTimer = setTimeout(async () => { dirty = false; await save({ words: proj.words }); saveState(); }, 600);
   }
   function applyText(i, value, done) {
     const l = lines[i];
@@ -863,7 +917,7 @@
     return { line: null, set };
   }
   band.addEventListener("pointerdown", (e) => {
-    if (!proj || ROWS() < 2 || mode === "record" || mode === "countdown") return;
+    if (!proj || client || ROWS() < 2 || mode === "record" || mode === "countdown") return;
     const h = hit(e);
     if (!h.box && !h.tag) return;
     const from = h.tag ? h.tag.row : h.box.row;
@@ -873,7 +927,7 @@
     e.preventDefault();
   });
   band.addEventListener("pointermove", (e) => {
-    if (!drag) { const h = proj && ROWS() > 1 ? hit(e) : {}; band.style.cursor = h.box || h.tag ? "grab" : ""; return; }
+    if (!drag) { const h = proj && !client && ROWS() > 1 ? hit(e) : {}; band.style.cursor = h.box || h.tag ? "grab" : ""; return; }
     const h = hit(e);
     drag.y = h.y; drag.row = h.row; drag.moved = true;
     band.style.cursor = "grabbing";
@@ -903,6 +957,171 @@
     await D.api(`/api/studio/${encodeURIComponent(proj.id)}`, { method: "DELETE" });
     $("#st-back").click();
   };
+
+  // ------------------------------------------------------------ micro et caméra
+  const PREF = "studio-devices";
+  const prefs = (() => { try { return JSON.parse(localStorage.getItem(PREF)) || {}; } catch { return {}; } })();
+  const keepPrefs = () => { try { localStorage.setItem(PREF, JSON.stringify(prefs)); } catch {} };
+  const devWarn = (text) => { $("#st-dev-warn").textContent = text || ""; $("#st-dev-warn").classList.toggle("hidden", !text); };
+  let meterCtx = null, meterSrc = null, meterRaf = 0;
+
+  async function listDevices() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    const all = await navigator.mediaDevices.enumerateDevices();
+    const fillSel = (sel, kind, none, chosen) => {
+      const items = all.filter((d) => d.kind === kind && d.deviceId && d.deviceId !== "default" && d.deviceId !== "communications");
+      sel.innerHTML = `<option value="">${none}</option>` + items.map((d, i) =>
+        `<option value="${esc(d.deviceId)}">${esc(d.label || (kind === "audioinput" ? "Micro " : "Caméra ") + (i + 1))}</option>`).join("");
+      sel.value = items.some((d) => d.deviceId === chosen) ? chosen : "";
+    };
+    fillSel($("#st-mic"), "audioinput", "Micro par défaut", prefs.mic);
+    fillSel($("#st-camsel"), "videoinput", "Caméra par défaut", prefs.cam);
+  }
+  if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener("devicechange", listDevices);
+
+  // Le micro branché sur l'ordinateur (choisi dans la liste, sinon celui par défaut)
+  async function micStream() {
+    if (stream && stream.active && stream.zMic === (prefs.mic || "")) return stream;
+    if (stream) stream.getTracks().forEach((t) => t.stop());
+    const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 };
+    if (prefs.mic) audio.deviceId = { exact: prefs.mic };
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio }); }
+    catch (e) {
+      if (!prefs.mic) throw e;
+      delete audio.deviceId; stream = await navigator.mediaDevices.getUserMedia({ audio });   // micro débranché : celui par défaut
+    }
+    stream.zMic = prefs.mic || "";
+    meter(stream);
+    listDevices();   // les noms des micros ne sont donnés qu'une fois l'accès autorisé
+    return stream;
+  }
+  function meter(s) {           // niveau du micro en direct
+    try {
+      meterCtx = meterCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (meterCtx.state === "suspended") meterCtx.resume();
+      if (meterSrc) meterSrc.disconnect();
+      meterSrc = meterCtx.createMediaStreamSource(s);
+      const an = meterCtx.createAnalyser(); an.fftSize = 512; meterSrc.connect(an);
+      const buf = new Float32Array(an.fftSize);
+      cancelAnimationFrame(meterRaf);
+      const tick = () => {
+        if (!s.active) { $("#st-meter").style.width = "0"; return; }
+        an.getFloatTimeDomainData(buf);
+        let peak = 0; for (const v of buf) peak = Math.max(peak, Math.abs(v));
+        $("#st-meter").style.width = Math.min(100, Math.round(Math.sqrt(peak) * 110)) + "%";
+        meterRaf = requestAnimationFrame(tick);
+      };
+      tick();
+    } catch {}
+  }
+  function noAccess(what) {
+    let msg = window.isSecureContext ? `${what} inaccessible : autorise-le dans la fenêtre qui s'affiche, ou dans les réglages de confidentialité de l'ordinateur.`
+      : `${what} demande une adresse sécurisée (https) : sur un autre appareil, utilise l'adresse « Accès depuis partout » (Réglages → Téléphone).`;
+    if (window.pywebview) msg += " Si rien ne marche dans la fenêtre de l'appli, ouvre Studio Rythmo dans ton navigateur (Chrome, Safari…).";
+    devWarn(msg);
+  }
+  $("#st-mic").addEventListener("change", async (e) => {
+    prefs.mic = e.target.value; keepPrefs();
+    try { await micStream(); devWarn(""); } catch { noAccess("Micro"); }
+  });
+  $("#st-mic-test").onclick = async () => {
+    try { await micStream(); devWarn(""); D.toast("Parle : la barre doit bouger"); } catch { noAccess("Micro"); }
+  };
+
+  // Retour de la webcam : ton image par-dessus la scène (dans l'écran, donc aussi en plein écran télé)
+  let cam = null;
+  const camBox = $("#st-cam-box");
+  function camLook() {
+    camBox.className = "cam " + (prefs.corner || "br") + ($("#st-cam-mirror").checked ? " mirror" : "") + (cam ? "" : " hidden");
+    camBox.style.setProperty("--cam-w", (prefs.size || 24) + "%");
+  }
+  async function camStart() {
+    camStop(true);
+    const video = { width: { ideal: 1280 }, height: { ideal: 720 } };
+    if (prefs.cam) video.deviceId = { exact: prefs.cam };
+    try { cam = await navigator.mediaDevices.getUserMedia({ video }); }
+    catch (e) {
+      if (prefs.cam) { delete video.deviceId; try { cam = await navigator.mediaDevices.getUserMedia({ video }); } catch {} }
+      if (!cam) { $("#st-cam-on").checked = false; prefs.camOn = false; keepPrefs(); noAccess("La caméra"); camLook(); return; }
+    }
+    devWarn("");
+    $("#st-cam").srcObject = cam;
+    $("#st-cam").play().catch(() => {});
+    camLook(); listDevices();
+  }
+  function camStop(keep) {
+    if (cam) cam.getTracks().forEach((t) => t.stop());
+    cam = null; $("#st-cam").srcObject = null;
+    if (!keep) camLook();
+  }
+  $("#st-cam-on").addEventListener("change", (e) => { prefs.camOn = e.target.checked; keepPrefs(); e.target.checked ? camStart() : camStop(); });
+  $("#st-camsel").addEventListener("change", (e) => { prefs.cam = e.target.value; keepPrefs(); if (cam) camStart(); });
+  $("#st-cam-mirror").addEventListener("change", (e) => { prefs.mirror = e.target.checked; keepPrefs(); camLook(); });
+  $("#st-cam-size").addEventListener("input", (e) => { prefs.size = Number(e.target.value); keepPrefs(); camLook(); });
+  $("#st-cam-move").onclick = () => {
+    const order = ["br", "bl", "tl", "tr"];
+    prefs.corner = order[(order.indexOf(prefs.corner || "br") + 1) % 4]; keepPrefs(); camLook();
+  };
+  $("#st-cam-mirror").checked = prefs.mirror !== false;
+  $("#st-cam-size").value = prefs.size || 24;
+  function devicesOnOpen() {    // à l'ouverture d'une scène : la caméra revient si elle était allumée
+    listDevices();
+    $("#st-cam-on").checked = !!prefs.camOn;
+    if (prefs.camOn && !cam) camStart(); else camLook();
+  }
+
+  // ------------------------------------------------------------ onglet Doubler (clients)
+  async function loadScenes() {
+    let list = [];
+    try { list = await D.api("/api/studio"); } catch (e) { return; }
+    $("#db-scenes").innerHTML = list.map((p, i) => `
+      <div class="glass lib-item">
+        <div class="thumb"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M7 8v8M17 6v12M2 11v2M22 10v4"/></svg></div>
+        <div class="meta"><b>${esc(p.title)}</b><small>${fmt(p.duration)} · ${p.speakers} personnage${p.speakers > 1 ? "s" : ""} · ${p.clips} prise${p.clips > 1 ? "s" : ""}</small></div>
+        <button class="btn small primary" style="width:auto;padding:8px 16px;font-size:14px" data-dub="${i}">Doubler</button>
+      </div>`).join("");
+    $("#db-scenes").querySelectorAll("[data-dub]").forEach((b) => (b.onclick = () => open(list[b.dataset.dub].id, { client: true })));
+  }
+  const DROP_SUB = "La scène exportée du Studio (avec sa bande rythmo) ou n'importe quelle vidéo déjà sans voix · ou glisse-la ici";
+  async function importScene(f) {
+    if (!f) return;
+    $("#db-drop").classList.add("filled");
+    $("#db-drop-title").textContent = f.name;
+    $("#db-drop-sub").textContent = D.fmtSize(f.size);
+    $("#db-up").classList.remove("hidden");
+    const step = (text, p) => { $("#db-up-step").textContent = text; $("#db-up-pct").textContent = Math.round(p * 100) + " %"; $("#db-up-bar").style.width = p * 100 + "%"; };
+    try {
+      const up = await D.upload(f, (p) => step(`Envoi… ${D.fmtSize(f.size * p)} / ${D.fmtSize(f.size)}`, p * 0.9));
+      step("Préparation de la scène…", 0.95);
+      const r = await D.post("/api/studio/import", { source: up.path, name: f.name });
+      step("Prête", 1);
+      D.toast(r.rythmo ? "Scène importée avec sa bande rythmo" : "Vidéo importée, sans bande rythmo (exporte la scène depuis le Studio pour l'avoir)", 5000);
+      await open(r.id, { client: true });
+    } catch (e) { D.toast("Import impossible : " + e.message, 6000); }
+    $("#db-up").classList.add("hidden");
+    $("#db-drop").classList.remove("filled");
+    $("#db-drop-title").textContent = "Choisir un MP4";
+    $("#db-drop-sub").textContent = DROP_SUB;
+    $("#db-file").value = "";
+  }
+  $("#db-file").addEventListener("change", (e) => importScene(e.target.files[0]));
+  const dbDrop = $("#db-drop");
+  ["dragenter", "dragover"].forEach((t) => dbDrop.addEventListener(t, (e) => { e.preventDefault(); dbDrop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach((t) => dbDrop.addEventListener(t, (e) => { e.preventDefault(); dbDrop.classList.remove("over"); }));
+  dbDrop.addEventListener("drop", (e) => importScene(e.dataTransfer.files[0]));
+  // Changer d'onglet pendant qu'une scène est ouverte dans l'autre : on la referme proprement
+  document.querySelector('[data-view="v-dub"]').addEventListener("click", () => {
+    if (proj && !client && !editor.classList.contains("hidden")) { stopAll(); camStop(); }
+    if (!client || editor.classList.contains("hidden")) { $("#db-home").classList.remove("hidden"); loadScenes(); }
+  });
+  document.querySelector('[data-view="v-studio"]').addEventListener("click", () => {
+    if (client && !editor.classList.contains("hidden")) {
+      closeEditor(); client = false;
+      editor.classList.remove("client", "imported");
+      $("#v-studio").appendChild(editor);
+    }
+  });
+  loadScenes();
 
   // ------------------------------------------------------------ démarrage
   document.querySelector('[data-view="v-studio"]').addEventListener("click", () => { loadProjects(); setTimeout(resize, 50); });

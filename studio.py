@@ -290,9 +290,109 @@ def reseparate(project_id: str):
     return job
 
 
+# ------------------------------------------------------------------ scène prête à doubler (onglet Doubler)
+# Le Studio exporte un MP4 sans les voix ; la bande rythmo (mots, personnages) voyage dans ses métadonnées.
+# L'onglet Doubler importe ce MP4 (ou n'importe quel MP4 déjà sans voix) et en fait une scène à doubler.
+SCENE_TAG = "studio_rythmo"
+
+
+def _ffmeta_escape(text: str) -> str:
+    return re.sub(r"([=;#\\\n])", r"\\\1", text)
+
+
+@router.get("/{project_id}/export")
+def export_scene(project_id: str):
+    path = project(project_id)
+    meta = read(path, "meta.json", {})
+    scene = {"v": 1, "title": meta.get("title", project_id), "words": read(path, "words.json", []),
+             "speakers": [{k: s[k] for k in ("id", "name", "portrait") if k in s} for s in meta.get("speakers", [])],
+             "latency_ms": meta.get("latency_ms", 0)}
+    title = re.sub(r"[^\w .()'-]", "", str(scene["title"])).strip() or "scene"
+    out = path / ".export.mp4"
+    ffmeta = path / ".export.ffmeta"
+    ffmeta.write_text(";FFMETADATA1\n" + f"{SCENE_TAG}=" + _ffmeta_escape(json.dumps(scene, ensure_ascii=False)) + "\n"
+                      + "title=" + _ffmeta_escape(str(scene["title"])) + "\n", encoding="utf-8")
+    try:
+        core.ffmpeg("-i", str(path / "ambiance.mp4"), "-f", "ffmetadata", "-i", str(ffmeta), "-map", "0", "-map_metadata", "1",
+                    "-c", "copy", "-movflags", "+faststart+use_metadata_tags", str(out))
+    except RuntimeError as exc:
+        raise HTTPException(500, f"Export impossible : {exc}") from exc
+    finally:
+        ffmeta.unlink(missing_ok=True)
+    from starlette.background import BackgroundTask
+    return FileResponse(out, media_type="video/mp4", filename=f"{title} - scène à doubler.mp4",
+                        background=BackgroundTask(out.unlink, missing_ok=True))  # copie temporaire, effacée une fois envoyée
+
+
+def _read_scene(media: Path) -> dict | None:
+    """La bande rythmo glissée dans un MP4 exporté par le Studio (None pour un MP4 ordinaire)."""
+    import subprocess
+    try:
+        out = subprocess.run(["ffprobe", "-v", "error", "-show_entries",
+                              f"format_tags={SCENE_TAG}", "-of", "json", str(media)],
+                             capture_output=True, text=True, encoding="utf-8", timeout=60).stdout
+        tags = json.loads(out or "{}").get("format", {}).get("tags", {})
+        raw = next((v for k, v in tags.items() if k.lower() == SCENE_TAG), None)
+        scene = json.loads(raw) if raw else None
+        return scene if isinstance(scene, dict) and isinstance(scene.get("words"), list) else None
+    except Exception:
+        return None
+
+
+@router.post("/import")
+def import_scene(data: dict = Body(...)):
+    source = Path(str(data.get("source", ""))).resolve()
+    if not source.is_file() or source.parent != UPLOADS.resolve():
+        raise HTTPException(422, "Vidéo introuvable : renvoie-la.")
+    scene = _read_scene(source)
+    name = str(data.get("name") or source.stem)
+    title = (scene or {}).get("title") or re.sub(r"\s*-\s*scène à doubler$", "", Path(name).stem)
+    title = re.sub(r"[^\w .()'-]", "", str(title)).strip()[:80] or "Scène"
+    project_id = f"{title} {time.strftime('%d-%m %Hh%M')}"
+    project_dir = STUDIO / project_id
+    if project_dir.exists():
+        project_id += f" {uuid.uuid4().hex[:4]}"
+        project_dir = STUDIO / project_id
+    project_dir.mkdir(parents=True)
+    (project_dir / "clips").mkdir()
+    try:
+        h264 = core.probe(source, "v:0", "stream=codec_name") == "h264"
+        has_audio = bool(core.probe(source, "a:0", "stream=codec_name"))
+        video = ["-c:v", "copy"] if h264 else ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p"]
+        # sans piste son, une piste muette : le montage final mixe les prises sur l'ambiance
+        silent = [] if has_audio else ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"]
+        audio = ["-map", "0:a:0" if has_audio else "1:a:0", "-c:a", "aac", "-b:a", "256k"] + ([] if has_audio else ["-shortest"])
+        core.ffmpeg("-i", str(source), *silent, "-map", "0:v:0", *audio, *video, "-map_metadata", "-1",
+                    "-movflags", "+faststart", str(project_dir / "ambiance.mp4"))
+    except Exception as exc:
+        shutil.rmtree(project_dir, ignore_errors=True)
+        raise HTTPException(422, f"Cette vidéo ne peut pas être lue : {exc}"[:400]) from exc
+    finally:
+        source.unlink(missing_ok=True)
+    words, speakers = [], core.speakers_meta(1)
+    if scene:
+        words = [{"w": str(w["w"])[:40], "s": float(w["s"]), "e": float(w["e"]), "sp": int(w.get("sp", 0))}
+                 for w in scene["words"] if str(w.get("w", "")).strip()]
+        if scene.get("speakers"):
+            speakers = [{"id": int(s["id"]), "name": str(s.get("name") or f"Personne {int(s['id']) + 1}")[:30],
+                         "color": core.COLORS[int(s["id"]) % len(core.COLORS)],
+                         **({"portrait": float(s["portrait"])} if isinstance(s.get("portrait"), (int, float)) else {})}
+                        for s in scene["speakers"]]
+    write(project_dir, "words.json", words)
+    write(project_dir, "clips.json", [])
+    duration = float(core.probe(project_dir / "ambiance.mp4", "v:0", "format=duration") or 0) or None
+    write(project_dir, "meta.json", {"title": title, "created": time.time(), "duration": duration, "imported": True,
+                                     "separation": "import", "speakers": speakers,
+                                     "latency_ms": int((scene or {}).get("latency_ms", 0) or 0),
+                                     "mix": {"voice": 1.2, "ambience": 1.0, "keep_original": False, "original": 1.0}})
+    return {"id": project_id, "rythmo": bool(words)}
+
+
 @router.get("/{project_id}/file/{name:path}")
 def project_file(project_id: str, name: str):
     base = project(project_id).resolve()
+    if name == "original.mp4" and not (base / name).is_file():  # scène importée : déjà sans les voix, pas d'original
+        name = "ambiance.mp4"
     path = (base / name).resolve()
     if base not in path.parents or not path.is_file() or path.name.startswith("."):
         raise HTTPException(404, "Fichier introuvable")

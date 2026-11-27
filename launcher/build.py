@@ -90,6 +90,7 @@ def main():
         plist = app_path / "Contents" / "Info.plist"
         info = plistlib.loads(plist.read_bytes())
         info.update({"NSMicrophoneUsageDescription": "Studio Rythmo enregistre ta voix dans le Studio.",
+                     "NSCameraUsageDescription": "Studio Rythmo affiche ta webcam pendant que tu doubles.",
                      "CFBundleDisplayName": "Studio Rythmo", "CFBundleName": "Studio Rythmo", "CFBundleShortVersionString": version.lstrip("v"),
                      "NSHighResolutionCapable": True, "LSMinimumSystemVersion": "11.0"})
         plist.write_bytes(plistlib.dumps(info))
